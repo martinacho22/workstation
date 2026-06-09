@@ -4,8 +4,11 @@
  * to the renderer via IPC. No API key needed — uses the user's subscription.
  */
 
-const { spawn } = require('child_process')
+const { spawn, execSync } = require('child_process')
 const { ipcMain } = require('electron')
+const os = require('os')
+const path = require('path')
+const fs = require('fs')
 
 // Which claude CLI to use — settable from settings
 let claudePath = 'claude'
@@ -16,7 +19,6 @@ function setClaudePath(p) {
 
 /**
  * Run a one-shot claude prompt and return the full response as a string.
- * Falls back to API if CLI fails and apiKey is provided.
  */
 function runClaude(prompt, opts = {}) {
   return new Promise((resolve, reject) => {
@@ -29,15 +31,10 @@ function runClaude(prompt, opts = {}) {
     } = opts
 
     const args = ['-p', prompt]
-
     if (skipPermissions) args.push('--dangerously-skip-permissions')
     if (continueSession) args.push('--continue')
     if (sessionId) { args.push('--resume'); args.push(sessionId) }
-
-    // Inject system prompt via stdin flag if provided
-    if (systemPrompt) {
-      args.push('--system-prompt', systemPrompt)
-    }
+    if (systemPrompt) { args.push('--system-prompt', systemPrompt) }
 
     const proc = spawn(claudePath, args, {
       env: { ...process.env },
@@ -54,21 +51,14 @@ function runClaude(prompt, opts = {}) {
       reject(new Error('Claude CLI timed out after ' + timeout + 'ms'))
     }, timeout)
 
-    proc.stdout.on('data', (data) => {
-      output += data.toString()
-    })
-
-    proc.stderr.on('data', (data) => {
-      errOutput += data.toString()
-    })
+    proc.stdout.on('data', (data) => { output += data.toString() })
+    proc.stderr.on('data', (data) => { errOutput += data.toString() })
 
     proc.on('close', (code) => {
       clearTimeout(timer)
       if (timedOut) return
       if (code !== 0) {
-        // Surface a helpful error
-        const msg = errOutput || `claude exited with code ${code}`
-        reject(new Error(msg))
+        reject(new Error(errOutput || `claude exited with code ${code}`))
       } else {
         resolve(output.trim())
       }
@@ -78,8 +68,7 @@ function runClaude(prompt, opts = {}) {
       clearTimeout(timer)
       if (err.code === 'ENOENT') {
         reject(new Error(
-          'Claude CLI not found. Install it with: npm install -g @anthropic-ai/claude-code\n' +
-          'Then authenticate: claude'
+          'Claude CLI not found.\nInstall: npm install -g @anthropic-ai/claude-code\nThen authenticate: claude'
         ))
       } else {
         reject(err)
@@ -90,7 +79,6 @@ function runClaude(prompt, opts = {}) {
 
 /**
  * Stream a claude prompt — calls progressCb with each chunk of stdout.
- * Resolves when complete.
  */
 function streamClaude(prompt, progressCb, opts = {}) {
   return new Promise((resolve, reject) => {
@@ -129,9 +117,7 @@ function streamClaude(prompt, progressCb, opts = {}) {
       if (progressCb) progressCb(chunk)
     })
 
-    proc.stderr.on('data', (data) => {
-      errOutput += data.toString()
-    })
+    proc.stderr.on('data', (data) => { errOutput += data.toString() })
 
     proc.on('close', (code) => {
       clearTimeout(timer)
@@ -151,67 +137,139 @@ function streamClaude(prompt, progressCb, opts = {}) {
 }
 
 /**
- * Check if claude CLI is installed and authenticated.
- * Returns { installed: bool, authenticated: bool, version: string | null, error: string | null }
+ * REAL auth check — runs `claude -p "hi" --output-format json`
+ * --max-tokens is NOT a valid CLI flag. This is the correct approach.
+ * Returns { installed, authenticated, version, path, error }
  */
 function checkClaudeStatus() {
   return new Promise((resolve) => {
-    const proc = spawn(claudePath, ['--version'], { shell: false })
-    let output = ''
+    // Step 1: Is the binary there?
+    const versionProc = spawn(claudePath, ['--version'], { shell: false })
+    let versionOutput = ''
 
-    proc.stdout.on('data', d => { output += d.toString() })
-    proc.stderr.on('data', d => { output += d.toString() })
+    versionProc.stdout.on('data', d => { versionOutput += d.toString() })
+    versionProc.stderr.on('data', d => { versionOutput += d.toString() })
 
-    proc.on('close', (code) => {
-      if (code === 0) {
-        const version = output.trim()
-        // Try a minimal auth check — `claude whoami` or similar
-        checkAuth(version, resolve)
-      } else {
-        resolve({ installed: false, authenticated: false, version: null, error: 'Claude CLI not found' })
-      }
+    versionProc.on('error', () => {
+      resolve({
+        installed: false,
+        authenticated: false,
+        version: null,
+        path: null,
+        error: 'NOT_INSTALLED',
+      })
     })
 
-    proc.on('error', () => {
-      resolve({ installed: false, authenticated: false, version: null, error: 'Claude CLI not installed' })
+    versionProc.on('close', (code) => {
+      if (code !== 0) {
+        resolve({
+          installed: false,
+          authenticated: false,
+          version: null,
+          path: null,
+          error: 'NOT_INSTALLED',
+        })
+        return
+      }
+
+      const version = versionOutput.trim()
+
+      // Step 2: Resolve the actual binary path
+      let resolvedPath = claudePath
+      try {
+        resolvedPath = execSync(`which ${claudePath}`, { encoding: 'utf8' }).trim()
+      } catch (_) {}
+
+      // Step 3: Real auth check — run a minimal prompt
+      // We use --output-format json so we can detect auth errors cleanly
+      const authProc = spawn(claudePath, ['-p', 'respond with the word ok', '--output-format', 'json'], {
+        shell: false,
+        env: {
+          ...process.env,
+          // Unset any injected token that might be conflicting (Claude Desktop conflict)
+          CLAUDE_CODE_OAUTH_TOKEN: undefined,
+        },
+      })
+
+      let authOut = ''
+      let authErr = ''
+
+      authProc.stdout.on('data', d => { authOut += d.toString() })
+      authProc.stderr.on('data', d => { authErr += d.toString() })
+
+      authProc.on('close', (authCode) => {
+        if (authCode === 0 && authOut.length > 0) {
+          resolve({
+            installed: true,
+            authenticated: true,
+            version,
+            path: resolvedPath,
+            error: null,
+          })
+        } else {
+          const combined = (authOut + authErr).toLowerCase()
+          let error = 'NOT_AUTHENTICATED'
+
+          if (combined.includes('oauth') || combined.includes('token')) {
+            error = 'TOKEN_CONFLICT' // Claude Desktop conflict
+          } else if (combined.includes('network') || combined.includes('connect')) {
+            error = 'NETWORK_ERROR'
+          }
+
+          resolve({
+            installed: true,
+            authenticated: false,
+            version,
+            path: resolvedPath,
+            error,
+            rawError: authErr || authOut,
+          })
+        }
+      })
+
+      authProc.on('error', () => {
+        resolve({ installed: true, authenticated: false, version, path: resolvedPath, error: 'NOT_AUTHENTICATED' })
+      })
     })
   })
 }
 
-function checkAuth(version, resolve) {
-  // Run `claude -p "hi" --max-tokens 1` as a quick auth check
-  const proc = spawn(claudePath, ['-p', 'hi', '--max-tokens', '5'], { shell: false })
-  let errOutput = ''
+/**
+ * Attempt to fix common auth issues automatically.
+ * Returns { success, message }
+ */
+function attemptAuthFix() {
+  return new Promise((resolve) => {
+    // Clear the cache directory
+    const cacheDir = path.join(os.homedir(), '.claude', 'cache')
+    try {
+      if (fs.existsSync(cacheDir)) {
+        fs.rmSync(cacheDir, { recursive: true, force: true })
+      }
+    } catch (_) {}
 
-  proc.stderr.on('data', d => { errOutput += d.toString() })
+    // Run claude /logout then signal the renderer to open a terminal for re-auth
+    const logoutProc = spawn(claudePath, ['/logout'], { shell: false })
 
-  proc.on('close', (code) => {
-    if (code === 0) {
-      resolve({ installed: true, authenticated: true, version, error: null })
-    } else {
-      const isAuthError = errOutput.toLowerCase().includes('auth') ||
-        errOutput.toLowerCase().includes('login') ||
-        errOutput.toLowerCase().includes('not logged')
+    logoutProc.on('close', () => {
       resolve({
-        installed: true,
-        authenticated: false,
-        version,
-        error: isAuthError
-          ? 'Not authenticated — run `claude` in your terminal to log in'
-          : errOutput || 'Unknown error',
+        success: true,
+        message: 'Cache cleared and logged out. Please run `claude` in your terminal to re-authenticate.',
       })
-    }
-  })
+    })
 
-  proc.on('error', () => {
-    resolve({ installed: false, authenticated: false, version: null, error: 'CLI not found' })
+    logoutProc.on('error', () => {
+      resolve({
+        success: false,
+        message: 'Could not run logout. Please run `claude /logout` manually in your terminal.',
+      })
+    })
   })
 }
 
 // ─── IPC Handlers ─────────────────────────────────────────────────────────────
 
 function registerClaudeBridgeHandlers() {
-  // One-shot prompt → full response
   ipcMain.handle('claude:run', async (event, { prompt, opts }) => {
     try {
       const result = await runClaude(prompt, opts || {})
@@ -221,15 +279,11 @@ function registerClaudeBridgeHandlers() {
     }
   })
 
-  // Streaming prompt — sends chunks via event, resolves at end
   ipcMain.handle('claude:stream', async (event, { id, prompt, opts }) => {
     try {
       const result = await streamClaude(
         prompt,
-        (chunk) => {
-          // Send each chunk back to renderer
-          event.sender.send(`claude:stream:chunk:${id}`, chunk)
-        },
+        (chunk) => { event.sender.send(`claude:stream:chunk:${id}`, chunk) },
         opts || {}
       )
       event.sender.send(`claude:stream:done:${id}`, result)
@@ -240,16 +294,24 @@ function registerClaudeBridgeHandlers() {
     }
   })
 
-  // Check CLI status
   ipcMain.handle('claude:status', async () => {
     return await checkClaudeStatus()
   })
 
-  // Update CLI path
   ipcMain.handle('claude:set-path', (event, { path: p }) => {
     setClaudePath(p)
     return { success: true }
   })
+
+  ipcMain.handle('claude:fix-auth', async () => {
+    return await attemptAuthFix()
+  })
 }
 
-module.exports = { registerClaudeBridgeHandlers, runClaude, streamClaude, checkClaudeStatus, setClaudePath }
+module.exports = {
+  registerClaudeBridgeHandlers,
+  runClaude,
+  streamClaude,
+  checkClaudeStatus,
+  setClaudePath,
+}
