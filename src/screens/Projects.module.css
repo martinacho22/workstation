@@ -1,0 +1,168 @@
+.page {
+  flex: 1;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 40px 48px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.header { margin-bottom: 28px; }
+.title { font-size: 28px; font-weight: 700; color: #fff; margin: 0 0 4px; letter-spacing: -0.02em; }
+.subtitle { font-size: 14px; color: rgba(255,255,255,0.35); margin: 0; }
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 28px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: rgba(255,255,255,0.4);
+  font-size: 13px;
+  padding: 8px 16px 10px;
+  cursor: pointer;
+  transition: color 0.15s;
+  margin-bottom: -1px;
+}
+.tab:hover { color: rgba(255,255,255,0.75); }
+.activeTab { color: var(--accent) !important; border-bottom-color: var(--accent); }
+
+/* Grid */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.15s;
+}
+.card:hover { border-color: rgba(0,255,136,0.15); }
+
+.cardName { font-size: 15px; font-weight: 600; color: #fff; }
+.cardDesc { font-size: 12px; color: rgba(255,255,255,0.4); line-height: 1.5; flex: 1; }
+.cardMeta { display: flex; gap: 12px; font-size: 11px; color: rgba(255,255,255,0.25); flex-wrap: wrap; }
+
+.useBtn {
+  background: rgba(0,255,136,0.1);
+  border: 1px solid rgba(0,255,136,0.2);
+  color: var(--accent);
+  border-radius: 7px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-top: 4px;
+}
+.useBtn:hover { background: rgba(0,255,136,0.18); }
+
+/* Import */
+.importPanel {
+  max-width: 580px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.importTitle { font-size: 17px; font-weight: 600; color: #fff; }
+.importDesc { font-size: 13px; color: rgba(255,255,255,0.4); line-height: 1.6; }
+
+.importRow { display: flex; gap: 8px; }
+
+.importInput {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: var(--text);
+  font-size: 13px;
+  font-family: 'JetBrains Mono', monospace;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.importInput:focus { border-color: rgba(0,255,136,0.35); }
+.importInput::placeholder { color: rgba(255,255,255,0.2); }
+
+.browseBtn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: rgba(255,255,255,0.6);
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.browseBtn:hover { background: rgba(255,255,255,0.08); }
+
+.importBtn {
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  align-self: flex-start;
+}
+.importBtn:hover { opacity: 0.85; }
+.importBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.importResult {
+  background: rgba(0,255,136,0.06);
+  border: 1px solid rgba(0,255,136,0.2);
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.importHow {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px;
+}
+
+.importHowTitle { font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+
+.importSteps {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.importSteps li { font-size: 13px; color: rgba(255,255,255,0.45); line-height: 1.5; }
+.importSteps code { font-family: monospace; color: rgba(0,255,136,0.7); font-size: 12px; }
+
+/* Empty */
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 0;
+  gap: 12px;
+}
+.emptyIcon { font-size: 40px; opacity: 0.3; }
+.emptyTitle { font-size: 16px; font-weight: 600; color: rgba(255,255,255,0.4); }
+.emptyDesc { font-size: 13px; color: rgba(255,255,255,0.25); text-align: center; max-width: 320px; line-height: 1.6; }
