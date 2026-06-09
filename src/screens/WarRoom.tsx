@@ -14,18 +14,19 @@ export default function WarRoom() {
   const handoffNodes  = nodes.filter(n => n.data?.kind === 'handoff')
   const deployNodes   = nodes.filter(n => n.data?.kind === 'deploy')
 
-  const done    = sectionNodes.filter(n => n.data?.status === 'done').length
-  const blocked = sectionNodes.filter(n => n.data?.status === 'blocked').length
-  const total   = sectionNodes.length
+  const done     = sectionNodes.filter(n => n.data?.status === 'done').length
+  const blocked  = sectionNodes.filter(n => n.data?.status === 'blocked').length
+  const total    = sectionNodes.length
   const progress = total > 0 ? Math.round((done / total) * 100) : 0
+  const openTangents = tangentNodes.filter(n => !n.data?.resolved).length
 
   const TABS: { id: Tab; label: string; count?: number }[] = [
     { id: 'overview',  label: 'Overview' },
     { id: 'sections',  label: 'Sections',  count: total },
-    { id: 'bugs',      label: 'Bugs',       count: bugNodes.length },
-    { id: 'tangents',  label: 'Tangents',   count: tangentNodes.length },
-    { id: 'handoffs',  label: 'Handoffs',   count: handoffNodes.length },
-    { id: 'deploy',    label: 'Deploy',     count: deployNodes.length },
+    { id: 'bugs',      label: 'Bugs',      count: bugNodes.length },
+    { id: 'tangents',  label: 'Tangents',  count: tangentNodes.length },
+    { id: 'handoffs',  label: 'Handoffs',  count: handoffNodes.length },
+    { id: 'deploy',    label: 'Deploy',    count: deployNodes.length },
   ]
 
   return (
@@ -65,16 +66,16 @@ export default function WarRoom() {
 
         {tab === 'overview' && (
           <div className={styles.overviewGrid}>
-            <StatCard label="Total Sections"  value={total}                  />
-            <StatCard label="Done"            value={done}    accent="#4ade80" />
-            <StatCard label="Blocked"         value={blocked} accent="#f0c040" />
-            <StatCard label="Open Bugs"       value={bugNodes.length}     accent="#f87171" />
-            <StatCard label="Open Tangents"   value={tangentNodes.filter(n => !n.data?.resolved).length} accent="#f0c040" />
-            <StatCard label="Handoff Docs"    value={handoffNodes.length} accent="var(--accent)" />
+            <StatCard label="Total Sections" value={total} />
+            <StatCard label="Done"           value={done}              accent="#4ade80" />
+            <StatCard label="Blocked"        value={blocked}           accent="#f0c040" />
+            <StatCard label="Open Bugs"      value={bugNodes.length}   accent="#f87171" />
+            <StatCard label="Open Tangents"  value={openTangents}      accent="#f0c040" />
+            <StatCard label="Handoff Docs"   value={handoffNodes.length} accent="var(--accent)" />
 
             {blocked > 0 && (
               <div className={styles.alertCard}>
-                <span className={styles.alertIcon}>⚠️</span>
+                <div className={styles.alertIndicator} style={{ background: '#f0c040' }} />
                 <div>
                   <div className={styles.alertTitle}>{blocked} section{blocked > 1 ? 's' : ''} blocked</div>
                   <div className={styles.alertDesc}>Review blocked sections and unblock them to continue progress.</div>
@@ -82,11 +83,11 @@ export default function WarRoom() {
               </div>
             )}
 
-            {tangentNodes.filter(n => !n.data?.resolved).length > 0 && (
+            {openTangents > 0 && (
               <div className={styles.alertCard} style={{ borderColor: 'rgba(240,192,64,0.2)' }}>
-                <span className={styles.alertIcon}>↘</span>
+                <div className={styles.alertIndicator} style={{ background: '#f0c040' }} />
                 <div>
-                  <div className={styles.alertTitle}>{tangentNodes.filter(n => !n.data?.resolved).length} unresolved tangent{tangentNodes.filter(n => !n.data?.resolved).length > 1 ? 's' : ''}</div>
+                  <div className={styles.alertTitle}>{openTangents} unresolved tangent{openTangents > 1 ? 's' : ''}</div>
                   <div className={styles.alertDesc}>Resolve tangents before marking the project complete.</div>
                 </div>
               </div>
@@ -104,7 +105,7 @@ export default function WarRoom() {
                   <div>
                     <div className={styles.listItemName}>{n.data?.label as string ?? 'Untitled'}</div>
                     {n.data?.blockedReason && (
-                      <div className={styles.blockedReason}>⚠ {n.data.blockedReason as string}</div>
+                      <div className={styles.blockedReason}>{n.data.blockedReason as string}</div>
                     )}
                   </div>
                 </div>
@@ -118,11 +119,11 @@ export default function WarRoom() {
 
         {tab === 'bugs' && (
           <div className={styles.list}>
-            {bugNodes.length === 0 && <EmptyState label="No bugs filed — great sign 🎉" />}
+            {bugNodes.length === 0 && <EmptyState label="No bugs filed" />}
             {bugNodes.map(n => (
               <div key={n.id} className={styles.listItem}>
                 <div className={styles.listItemLeft}>
-                  <span style={{ color: '#f87171', fontSize: 16 }}>🐛</span>
+                  <div className={styles.bugDot} />
                   <div>
                     <div className={styles.listItemName}>{n.data?.label as string ?? 'Untitled bug'}</div>
                     <div className={styles.listItemSub}>{n.data?.description as string ?? ''}</div>
@@ -138,11 +139,11 @@ export default function WarRoom() {
 
         {tab === 'tangents' && (
           <div className={styles.list}>
-            {tangentNodes.length === 0 && <EmptyState label="No tangents — clean workflow 👌" />}
+            {tangentNodes.length === 0 && <EmptyState label="No tangents — clean workflow" />}
             {tangentNodes.map(n => (
               <div key={n.id} className={styles.listItem}>
                 <div className={styles.listItemLeft}>
-                  <span style={{ color: n.data?.resolved ? '#4ade80' : '#f0c040', fontSize: 16 }}>↘</span>
+                  <div className={styles.tangentDot} style={{ background: n.data?.resolved ? '#4ade80' : '#f0c040' }} />
                   <div>
                     <div className={styles.listItemName}>{n.data?.label as string ?? 'Tangent'}</div>
                     {n.data?.tiebackTarget && (
@@ -164,7 +165,7 @@ export default function WarRoom() {
             {handoffNodes.map(n => (
               <div key={n.id} className={`${styles.listItem} ${styles.handoffItem}`}>
                 <div className={styles.listItemLeft}>
-                  <span style={{ color: 'var(--accent)', fontSize: 16 }}>📄</span>
+                  <div className={styles.handoffDot} />
                   <div>
                     <div className={styles.listItemName}>{n.data?.label as string ?? 'Handoff Doc'}</div>
                     <div className={styles.listItemSub}>{n.data?.updatedAt as string ?? ''}</div>
@@ -182,14 +183,14 @@ export default function WarRoom() {
             {deployNodes.map(n => (
               <div key={n.id} className={styles.listItem}>
                 <div className={styles.listItemLeft}>
-                  <span style={{ color: '#00c8ff', fontSize: 16 }}>🚀</span>
+                  <div className={styles.deployDot} />
                   <div>
                     <div className={styles.listItemName}>{n.data?.platform as string ?? 'Deploy'}</div>
                     <div className={styles.listItemSub}>{n.data?.status as string ?? 'Not deployed'}</div>
                   </div>
                 </div>
                 <span className={styles.statusBadge} data-status={n.data?.deployed ? 'done' : 'idle'}>
-                  {n.data?.deployed ? '✓ Live' : 'Pending'}
+                  {n.data?.deployed ? 'Live' : 'Pending'}
                 </span>
               </div>
             ))}
@@ -220,7 +221,7 @@ function StatCard({ label, value, accent }: { label: string; value: number; acce
 
 function StatusDot({ status }: { status: string }) {
   const color = status === 'done' ? '#4ade80' : status === 'blocked' ? '#f0c040' : status === 'active' ? 'var(--accent)' : 'rgba(255,255,255,0.2)'
-  return <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0, marginTop: 5 }} />
+  return <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0, marginTop: 5, display: 'inline-block' }} />
 }
 
 function EmptyState({ label }: { label: string }) {
