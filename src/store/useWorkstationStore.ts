@@ -45,10 +45,6 @@ interface WorkstationState {
   toggleChecklistItem: (id: string) => void
   checklistLoading: boolean
 
-  // API key is now optional — only used as fallback if CLI unavailable
-  apiKey: string
-  setApiKey: (key: string) => void
-
   // Claude CLI path (persisted)
   claudeCliPath: string
   setClaudeCliPath: (p: string) => void
@@ -90,10 +86,6 @@ interface WorkstationState {
 
   roadmapVisible: boolean
   toggleRoadmap: () => void
-
-  apiKeyModalVisible: boolean
-  showApiKeyModal: () => void
-  hideApiKeyModal: () => void
 }
 
 const DEFAULT_SKILLS = [
@@ -145,8 +137,6 @@ const INITIAL_NODES: Node<WorkstationNodeData>[] = [
 export const useWorkstationStore = create<WorkstationState>()(
   persist(
     immer((set, get) => ({
-      // ─── Multi-project ────────────────────────────────────────────────────
-
       projects: [],
       activeProjectId: null,
 
@@ -240,8 +230,6 @@ export const useWorkstationStore = create<WorkstationState>()(
         })
       },
 
-      // ─── Current project ──────────────────────────────────────────────────
-
       project: null,
       setProject: (p) => set((s) => {
         s.project = p
@@ -250,8 +238,6 @@ export const useWorkstationStore = create<WorkstationState>()(
         else s.projects.push(p)
         s.activeProjectId = p.id
       }),
-
-      // ─── ADRs ─────────────────────────────────────────────────────────────
 
       addAdr: (title, decision, reason) => set((s) => {
         if (!s.project) return
@@ -268,8 +254,6 @@ export const useWorkstationStore = create<WorkstationState>()(
         const idx = s.projects.findIndex(p => p.id === s.project?.id)
         if (idx >= 0) s.projects[idx] = s.project!
       }),
-
-      // ─── Completion checklist ─────────────────────────────────────────────
 
       checklistLoading: false,
 
@@ -299,11 +283,7 @@ Rules:
 - No markdown, no explanation — just the JSON array`
 
         try {
-          const text = await runClaude(prompt, {
-            apiKey: state.apiKey,
-            maxTokens: 800,
-          })
-
+          const text = await runClaude(prompt)
           const match = text.match(/\[[\s\S]*\]/)
           if (!match) throw new Error('No JSON array')
 
@@ -337,24 +317,12 @@ Rules:
         if (idx >= 0) s.projects[idx] = s.project!
       }),
 
-      // ─── API Key (optional fallback) ──────────────────────────────────────
-
-      apiKey: '',
-      setApiKey: (key) => set((s) => { s.apiKey = key }),
-
-      // ─── Claude CLI path ──────────────────────────────────────────────────
-
       claudeCliPath: 'claude',
       setClaudeCliPath: (p) => {
         set((s) => { s.claudeCliPath = p || 'claude' })
-        // Notify main process
         const electronAPI = (window as any).electron
         if (electronAPI?.claude?.setPath) electronAPI.claude.setPath(p || 'claude')
       },
-
-      apiKeyModalVisible: false,
-      showApiKeyModal: () => set((s) => { s.apiKeyModalVisible = true }),
-      hideApiKeyModal: () => set((s) => { s.apiKeyModalVisible = false }),
 
       blueprintLoading: false,
       blueprintError: null,
@@ -372,8 +340,6 @@ Rules:
 
       setActiveNode: (id) => set((s) => { s.activeNodeId = id }),
       toggleRoadmap: () => set((s) => { s.roadmapVisible = !s.roadmapVisible }),
-
-      // ─── Add nodes ─────────────────────────────────────────────────────────
 
       addSectionNode: (label, position) => {
         const nodes = get().nodes
@@ -457,8 +423,6 @@ Rules:
         return node.id
       },
 
-      // ─── Node actions ──────────────────────────────────────────────────────
-
       updateNodeStatus: (id, status, blockedReason) =>
         set((s) => {
           const node = s.nodes.find(n => n.id === id)
@@ -525,8 +489,6 @@ Rules:
         }
       }),
 
-      // ─── Blueprint ─────────────────────────────────────────────────────────
-
       generateBlueprint: async (idea: string) => {
         const state = get()
         set((s) => { s.blueprintLoading = true; s.blueprintError = null })
@@ -551,7 +513,7 @@ Rules:
 - Be specific and actionable`
 
         try {
-          const text = await runClaude(prompt, { apiKey: state.apiKey, maxTokens: 1200 })
+          const text = await runClaude(prompt)
           const match = text.match(/\[[\s\S]*\]/)
           if (!match) throw new Error('No JSON array found in response')
           const sections: BlueprintSection[] = JSON.parse(match[0])
@@ -574,8 +536,6 @@ Rules:
           store.addSectionNode(section.label, { x: 600 + i * 520, y: 300 })
         })
       },
-
-      // ─── Context injection ────────────────────────────────────────────────
 
       buildProjectContext: (nodeId?: string): ProjectContext => {
         const state = get()
@@ -651,8 +611,6 @@ Write production-quality code. Be concise. Ask before making large structural ch
         return contextFile
       },
 
-      // ─── Handoff doc ───────────────────────────────────────────────────────
-
       generateHandoffDoc: async (nodeId: string) => {
         const state = get()
         const node = state.nodes.find(n => n.id === nodeId)
@@ -676,7 +634,7 @@ Return a JSON object:
 }`
 
         try {
-          const text = await runClaude(prompt, { apiKey: state.apiKey, maxTokens: 600 })
+          const text = await runClaude(prompt)
           const match = text.match(/\{[\s\S]*\}/)
           if (!match) return
 
@@ -713,8 +671,6 @@ Return a JSON object:
           console.error('Handoff doc generation failed:', err)
         }
       },
-
-      // ─── Final handoff export ─────────────────────────────────────────────
 
       exportFinalHandoff: (): string => {
         const state = get()
@@ -789,7 +745,6 @@ Return a JSON object:
         project: s.project,
         nodes: s.nodes,
         edges: s.edges,
-        apiKey: s.apiKey,
         claudeCliPath: s.claudeCliPath,
       }),
     }
