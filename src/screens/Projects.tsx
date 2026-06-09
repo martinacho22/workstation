@@ -4,12 +4,12 @@ import styles from './Projects.module.css'
 type Tab = 'import' | 'templates' | 'saved'
 
 const TEMPLATES = [
-  { id: 't1', name: 'Next.js SaaS Starter', desc: 'Auth, billing, dashboard, deploy to Vercel', stack: 'Next.js + Supabase + Stripe', sections: 7 },
-  { id: 't2', name: 'REST API',             desc: 'Express API with auth, DB, and Railway deploy', stack: 'Node.js + Postgres + Railway', sections: 5 },
-  { id: 't3', name: 'React Native App',     desc: 'Mobile app with Expo + backend', stack: 'Expo + FastAPI + Supabase', sections: 6 },
-  { id: 't4', name: 'Electron Desktop App', desc: 'Desktop tool with local storage and auto-update', stack: 'Electron + React + SQLite', sections: 5 },
-  { id: 't5', name: 'Python CLI Tool',      desc: 'Packaged CLI with tests and PyPI publish', stack: 'Python + Click + pytest', sections: 4 },
-  { id: 't6', name: 'Blank Canvas',         desc: 'Start from scratch — you define the sections', stack: 'Your choice', sections: 0 },
+  { id: 't1', name: 'Next.js SaaS Starter',  desc: 'Auth, billing, dashboard, deploy to Vercel',         stack: 'Next.js + Supabase + Stripe',    sections: 7 },
+  { id: 't2', name: 'REST API',               desc: 'Express API with auth, DB, and Railway deploy',       stack: 'Node.js + Postgres + Railway',   sections: 5 },
+  { id: 't3', name: 'React Native App',       desc: 'Mobile app with Expo + backend',                     stack: 'Expo + FastAPI + Supabase',       sections: 6 },
+  { id: 't4', name: 'Electron Desktop App',   desc: 'Desktop tool with local storage and auto-update',    stack: 'Electron + React + SQLite',       sections: 5 },
+  { id: 't5', name: 'Python CLI Tool',        desc: 'Packaged CLI with tests and PyPI publish',           stack: 'Python + Click + pytest',         sections: 4 },
+  { id: 't6', name: 'Blank Canvas',           desc: 'Start from scratch — you define the sections',       stack: 'Your choice',                     sections: 0 },
 ]
 
 interface Props {
@@ -27,10 +27,10 @@ export default function Projects({ onLoadTemplate, onImport }: Props) {
     if (!importPath.trim()) return
     setImporting(true)
     setImportResult(null)
-    // In real Electron app: window.electronAPI.analyzeProject(importPath)
+    // In real Electron: window.electronAPI.analyzeProject(importPath)
     setTimeout(() => {
       setImporting(false)
-      setImportResult('✓ Project analyzed — 6 sections detected. Ready to load into canvas.')
+      setImportResult('Project analyzed — 6 sections detected. Ready to load into canvas.')
       onImport(importPath)
     }, 2000)
   }
@@ -45,13 +45,13 @@ export default function Projects({ onLoadTemplate, onImport }: Props) {
       {/* Tabs */}
       <div className={styles.tabs}>
         <button className={`${styles.tab} ${tab === 'templates' ? styles.activeTab : ''}`} onClick={() => setTab('templates')}>
-          📋 Templates
+          Templates
         </button>
         <button className={`${styles.tab} ${tab === 'import' ? styles.activeTab : ''}`} onClick={() => setTab('import')}>
-          📂 Import Existing Project
+          Import Existing
         </button>
         <button className={`${styles.tab} ${tab === 'saved' ? styles.activeTab : ''}`} onClick={() => setTab('saved')}>
-          💾 My Saved Templates
+          Saved Templates
         </button>
       </div>
 
@@ -63,8 +63,8 @@ export default function Projects({ onLoadTemplate, onImport }: Props) {
               <div className={styles.cardName}>{t.name}</div>
               <div className={styles.cardDesc}>{t.desc}</div>
               <div className={styles.cardMeta}>
-                <span>📦 {t.stack}</span>
-                {t.sections > 0 && <span>📐 {t.sections} sections</span>}
+                <span>{t.stack}</span>
+                {t.sections > 0 && <span>{t.sections} sections</span>}
               </div>
               <button className={styles.useBtn} onClick={() => onLoadTemplate(t.id)}>
                 Use Template →
@@ -131,10 +131,10 @@ export default function Projects({ onLoadTemplate, onImport }: Props) {
       {/* Saved */}
       {tab === 'saved' && (
         <div className={styles.emptyState}>
-          <div className={styles.emptyIcon}>💾</div>
+          <div className={styles.emptyIcon}>[ ]</div>
           <div className={styles.emptyTitle}>No saved templates yet</div>
           <div className={styles.emptyDesc}>
-            Finish a project and save its canvas structure as a template — you can reuse it for future projects.
+            Finish a project and save its canvas structure as a template — reuse it for future projects.
           </div>
         </div>
       )}
