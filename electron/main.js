@@ -1,8 +1,11 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron')
 const path = require('path')
-const { spawn } = require('child_process')
-const pty = require('node-pty')
 const os = require('os')
+
+let pty
+try { pty = require('node-pty') } catch (_) { pty = null }
+
+const { registerClaudeBridgeHandlers, setClaudePath } = require('./claudeBridge')
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
@@ -27,7 +30,7 @@ function createWindow() {
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173')
-    mainWindow.webContents.openDevTools({ mode: 'detach' })
+    // mainWindow.webContents.openDevTools({ mode: 'detach' })
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist-react/index.html'))
   }
@@ -39,6 +42,9 @@ function createWindow() {
 
 app.whenReady().then(() => {
   createWindow()
+
+  // Register Claude CLI bridge IPC handlers
+  registerClaudeBridgeHandlers()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -54,15 +60,13 @@ app.on('window-all-closed', () => {
 const terminals = {}
 
 ipcMain.handle('terminal:create', (event, { id, shell: shellCmd, skipPermissions }) => {
-  const shell = shellCmd || (os.platform() === 'win32' ? 'powershell.exe' : process.env.SHELL || 'bash')
+  if (!pty) return { success: false, error: 'node-pty not available — run npm install' }
 
-  const args = []
-
-  // Claude Code launch with optional skip permissions
+  const shellToUse = shellCmd || (os.platform() === 'win32' ? 'powershell.exe' : process.env.SHELL || 'bash')
   const isClaudeCode = shellCmd === 'claude'
   const launchArgs = isClaudeCode && skipPermissions ? ['--dangerously-skip-permissions'] : []
 
-  const ptyProcess = pty.spawn(shell, launchArgs, {
+  const ptyProcess = pty.spawn(shellToUse, launchArgs, {
     name: 'xterm-256color',
     cols: 120,
     rows: 40,
@@ -85,26 +89,33 @@ ipcMain.handle('terminal:create', (event, { id, shell: shellCmd, skipPermissions
 })
 
 ipcMain.handle('terminal:write', (event, { id, data }) => {
-  if (terminals[id]) {
-    terminals[id].write(data)
-    return { success: true }
-  }
+  if (terminals[id]) { terminals[id].write(data); return { success: true } }
   return { success: false, error: 'Terminal not found' }
 })
 
 ipcMain.handle('terminal:resize', (event, { id, cols, rows }) => {
-  if (terminals[id]) {
-    terminals[id].resize(cols, rows)
-    return { success: true }
-  }
+  if (terminals[id]) { terminals[id].resize(cols, rows); return { success: true } }
   return { success: false }
 })
 
 ipcMain.handle('terminal:kill', (event, { id }) => {
-  if (terminals[id]) {
-    terminals[id].kill()
-    delete terminals[id]
-    return { success: true }
-  }
+  if (terminals[id]) { terminals[id].kill(); delete terminals[id]; return { success: true } }
   return { success: false }
+})
+
+// ─── Claude CLI path setting ──────────────────────────────────────────────────
+
+ipcMain.handle('claude:set-path', (event, { path: p }) => {
+  setClaudePath(p)
+  return { success: true }
+})
+
+// ─── Folder picker (for project import) ──────────────────────────────────────
+
+ipcMain.handle('dialog:openFolder', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory'],
+    title: 'Select your project folder',
+  })
+  return result.canceled ? null : result.filePaths[0]
 })
