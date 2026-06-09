@@ -16,6 +16,11 @@
   min-width: 0;
 }
 
+.nodeIcon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
 .dot {
   width: 7px;
   height: 7px;
@@ -44,10 +49,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
-.label:hover {
-  color: var(--accent);
-}
+.label:hover { color: var(--accent); }
 
 .renameInput {
   font-size: 12px;
@@ -100,60 +102,25 @@
   transition: background 0.15s, color 0.15s;
   white-space: nowrap;
 }
+.btn:hover { background: var(--surface-3); color: var(--text-primary); }
 
-.btn:hover {
-  background: var(--surface-3);
-  color: var(--text-primary);
-}
-
-.doneBtn:hover {
-  background: rgba(0, 255, 136, 0.1);
-  color: var(--accent);
-}
-
-.undoneBtn {
-  color: var(--accent);
-}
-
-.undoneBtn:hover {
-  background: rgba(0, 255, 136, 0.1);
-  color: var(--text-muted);
-}
-
-.handoffBtn:hover {
-  background: rgba(100, 150, 255, 0.1);
-  color: #6496ff;
-}
-
-.deleteBtn:hover {
-  background: rgba(255, 70, 70, 0.1);
-  color: #ff4646;
-}
-
-.deleteConfirmBtn {
-  color: #ff4646;
-  font-size: 11px;
-}
-
-.deleteConfirmBtn:hover {
-  background: rgba(255, 70, 70, 0.15);
-}
+.doneBtn:hover { background: rgba(0, 255, 136, 0.1); color: var(--accent); }
+.undoneBtn { color: var(--accent); }
+.undoneBtn:hover { background: rgba(0, 255, 136, 0.1); color: var(--text-muted); }
+.handoffBtn:hover { background: rgba(100, 150, 255, 0.1); color: #6496ff; }
+.deleteBtn:hover { background: rgba(255, 70, 70, 0.1); color: #ff4646; }
+.deleteConfirmBtn { color: #ff4646; font-size: 11px; }
+.deleteConfirmBtn:hover { background: rgba(255, 70, 70, 0.15); }
 
 /* Resolve tangent dropdown */
-.resolveWrapper {
-  position: relative;
-}
+.resolveWrapper { position: relative; }
 
 .resolveBtn {
   font-size: 11px;
   color: #f0a500;
   padding: 2px 7px;
 }
-
-.resolveBtn:hover {
-  background: rgba(240, 165, 0, 0.1);
-  color: #f0c040;
-}
+.resolveBtn:hover { background: rgba(240, 165, 0, 0.1); color: #f0c040; }
 
 .resolveDropdown {
   position: absolute;
@@ -189,11 +156,7 @@
   cursor: pointer;
   transition: background 0.12s;
 }
-
-.resolveOption:hover {
-  background: var(--surface-3);
-  color: var(--accent);
-}
+.resolveOption:hover { background: var(--surface-3); color: var(--accent); }
 
 .deleteWrapper {
   display: flex;
