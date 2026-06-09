@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   ReactFlow,
   Background,
@@ -21,6 +21,7 @@ import Toolbar from '@/components/canvas/Toolbar'
 import RoadmapOverlay from '@/components/canvas/RoadmapOverlay'
 import ProjectSetup from '@/components/canvas/ProjectSetup'
 import ProgressBackground from '@/components/canvas/ProgressBackground'
+import ApiKeyModal from '@/components/canvas/ApiKeyModal'
 import { FlowEdge, TangentEdge, TiebackEdge } from '@/components/edges'
 
 const nodeTypes: NodeTypes = {
@@ -40,12 +41,25 @@ export default function App() {
     nodes, edges,
     onNodesChange, onEdgesChange,
     project, roadmapVisible,
-    addSectionNode, addTangentNode,
+    apiKey, showApiKeyModal,
+    setActiveNode,
   } = useWorkstationStore()
 
   const [showSetup, setShowSetup] = useState(!project)
 
   const onConnect = useCallback(() => {}, [])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      // Escape — deselect active node
+      if (e.key === 'Escape') {
+        setActiveNode(null)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [setActiveNode])
 
   if (showSetup) {
     return <ProjectSetup onDone={() => setShowSetup(false)} />
@@ -54,6 +68,31 @@ export default function App() {
   return (
     <div style={{ width: '100vw', height: '100vh', background: 'var(--bg)', position: 'relative' }}>
       <ProgressBackground />
+
+      {/* API Key warning banner */}
+      {!apiKey && (
+        <div
+          onClick={showApiKeyModal}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 50,
+            background: 'rgba(240,165,0,0.12)',
+            borderBottom: '1px solid rgba(240,165,0,0.3)',
+            color: '#f0c040',
+            fontSize: '12px',
+            textAlign: 'center',
+            padding: '6px',
+            cursor: 'pointer',
+            letterSpacing: '0.03em',
+          }}
+        >
+          ⚠️ No API key set — reasoning chat and handoff docs won't work.{' '}
+          <span style={{ textDecoration: 'underline' }}>Click to add your key →</span>
+        </div>
+      )}
 
       <ReactFlow
         nodes={nodes}
@@ -69,7 +108,8 @@ export default function App() {
         minZoom={0.2}
         maxZoom={2}
         proOptions={{ hideAttribution: true }}
-        style={{ background: 'transparent' }}
+        style={{ background: 'transparent', marginTop: apiKey ? 0 : 32 }}
+        onPaneClick={() => setActiveNode(null)}
       >
         <Background
           variant={BackgroundVariant.Dots}
@@ -107,6 +147,7 @@ export default function App() {
 
       <MinimizedPills />
       {roadmapVisible && <RoadmapOverlay />}
+      <ApiKeyModal />
     </div>
   )
 }
