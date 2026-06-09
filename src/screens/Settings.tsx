@@ -5,9 +5,9 @@ import styles from './Settings.module.css'
 type Tab = 'api' | 'terminal' | 'models' | 'appearance' | 'about'
 
 const MODELS = [
-  { id: 'claude-haiku-3-5',   label: 'Claude Haiku 3.5',   desc: 'Fastest. Best for handoff docs, small tasks.', cost: '$' },
-  { id: 'claude-sonnet-3-7', label: 'Claude Sonnet 3.7',  desc: 'Balanced. Best for planning and reasoning chats.', cost: '$$' },
-  { id: 'claude-opus-4',     label: 'Claude Opus 4',      desc: 'Most capable. Best for complex architecture decisions.', cost: '$$$' },
+  { id: 'claude-haiku-3-5',  label: 'Claude Haiku 3.5',  desc: 'Fastest. Best for handoff docs and small tasks.', cost: '$' },
+  { id: 'claude-sonnet-3-7', label: 'Claude Sonnet 3.7', desc: 'Balanced. Best for planning and reasoning chats.', cost: '$$' },
+  { id: 'claude-opus-4',     label: 'Claude Opus 4',     desc: 'Most capable. Best for complex architecture decisions.', cost: '$$$' },
 ]
 
 export default function Settings() {
@@ -30,11 +30,11 @@ export default function Settings() {
   }
 
   const TABS: { id: Tab; label: string }[] = [
-    { id: 'api',        label: '🔑 API Keys'    },
-    { id: 'terminal',   label: '⌨️  Terminal'    },
-    { id: 'models',     label: '🧠 Models'       },
-    { id: 'appearance', label: '🎨 Appearance'   },
-    { id: 'about',      label: 'ℹ️  About'        },
+    { id: 'api',        label: 'API Keys'    },
+    { id: 'terminal',   label: 'Terminal'    },
+    { id: 'models',     label: 'Models'      },
+    { id: 'appearance', label: 'Appearance'  },
+    { id: 'about',      label: 'About'       },
   ]
 
   return (
@@ -81,7 +81,7 @@ export default function Settings() {
                 </button>
               </div>
               <div className={styles.keyNote}>
-                💡 Your key is stored locally on this machine. It never leaves your device.
+                Your key is stored locally on this machine. It never leaves your device.
               </div>
               <button className={styles.saveBtn} onClick={saveKey}>
                 {saved ? '✓ Saved' : 'Save Key'}
@@ -120,7 +120,7 @@ export default function Settings() {
               <div className={`${styles.dangerBox} ${skipPerms ? styles.dangerActive : ''}`}>
                 <div className={styles.toggleRow}>
                   <div>
-                    <div className={styles.toggleLabel} style={{ color: '#f87171' }}>⚠ Skip Permissions (Dangerous)</div>
+                    <div className={styles.toggleLabel} style={{ color: '#f87171' }}>Skip Permissions — Dangerous</div>
                     <div className={styles.toggleDesc}>Passes <code>--dangerously-skip-permissions</code> to Claude Code. Use only if you know what you're doing.</div>
                   </div>
                   <div className={`${styles.toggle} ${skipPerms ? styles.toggleDanger : ''}`} onClick={() => {
@@ -161,7 +161,7 @@ export default function Settings() {
               <div className={styles.divider} />
 
               <div className={styles.sectionTitle}>Handoff Doc Model</div>
-              <div className={styles.sectionDesc}>Used for auto-generating handoff documents. Haiku recommended — it's fast and cheap.</div>
+              <div className={styles.sectionDesc}>Used for auto-generating handoff documents. Haiku recommended — fast and cost-effective.</div>
               <div className={styles.modelList}>
                 {MODELS.map(m => (
                   <div
@@ -223,7 +223,7 @@ export default function Settings() {
 
           {tab === 'about' && (
             <div className={styles.section}>
-              <div className={styles.aboutLogo}>⬡</div>
+              <div className={styles.aboutLogo}>W</div>
               <div className={styles.aboutName}>Workstation</div>
               <div className={styles.aboutVersion}>v0.1.0 — Early Access</div>
               <div className={styles.aboutDesc}>
