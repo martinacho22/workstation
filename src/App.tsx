@@ -16,6 +16,8 @@ import { useWorkstationStore } from '@/store/useWorkstationStore'
 import SectionNode from '@/components/nodes/SectionNode'
 import OverviewNode from '@/components/nodes/OverviewNode'
 import HandoffNode from '@/components/nodes/HandoffNode'
+import DeployNode from '@/components/nodes/DeployNode'
+import BugNode from '@/components/nodes/BugNode'
 import MinimizedPills from '@/components/canvas/MinimizedPills'
 import Toolbar from '@/components/canvas/Toolbar'
 import RoadmapOverlay from '@/components/canvas/RoadmapOverlay'
@@ -28,6 +30,8 @@ const nodeTypes: NodeTypes = {
   sectionNode:  SectionNode,
   overviewNode: OverviewNode,
   handoffNode:  HandoffNode,
+  deployNode:   DeployNode,
+  bugNode:      BugNode,
 }
 
 const edgeTypes: EdgeTypes = {
@@ -49,13 +53,9 @@ export default function App() {
 
   const onConnect = useCallback(() => {}, [])
 
-  // Keyboard shortcuts
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      // Escape — deselect active node
-      if (e.key === 'Escape') {
-        setActiveNode(null)
-      }
+      if (e.key === 'Escape') setActiveNode(null)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -69,7 +69,6 @@ export default function App() {
     <div style={{ width: '100vw', height: '100vh', background: 'var(--bg)', position: 'relative' }}>
       <ProgressBackground />
 
-      {/* API Key warning banner */}
       {!apiKey && (
         <div
           onClick={showApiKeyModal}
@@ -105,7 +104,7 @@ export default function App() {
         connectionMode={ConnectionMode.Loose}
         fitView
         fitViewOptions={{ padding: 0.3 }}
-        minZoom={0.2}
+        minZoom={0.15}
         maxZoom={2}
         proOptions={{ hideAttribution: true }}
         style={{ background: 'transparent', marginTop: apiKey ? 0 : 32 }}
@@ -133,7 +132,10 @@ export default function App() {
             borderRadius: 'var(--radius)',
           }}
           nodeColor={(n) => {
+            if (n.data?.kind === 'deploy') return 'rgba(0,200,255,0.6)'
+            if (n.data?.kind === 'bug') return 'rgba(255,96,96,0.6)'
             if (n.data?.status === 'done') return 'var(--done)'
+            if (n.data?.status === 'blocked') return 'rgba(255,200,60,0.6)'
             if (n.data?.kind === 'overview') return 'var(--accent)'
             return 'var(--surface2)'
           }}
