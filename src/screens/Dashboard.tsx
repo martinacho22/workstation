@@ -55,10 +55,17 @@ const STATUS_COLOR: Record<Project['status'], string> = {
 }
 
 const STATUS_LABEL: Record<Project['status'], string> = {
-  active:  '● Active',
-  blocked: '⚠ Blocked',
-  done:    '✓ Done',
-  idle:    '○ Idle',
+  active:  'Active',
+  blocked: 'Blocked',
+  done:    'Done',
+  idle:    'Idle',
+}
+
+const STATUS_DOT: Record<Project['status'], string> = {
+  active:  '●',
+  blocked: '▲',
+  done:    '✓',
+  idle:    '○',
 }
 
 interface Props {
@@ -130,7 +137,7 @@ export default function Dashboard({ onOpenCanvas, onNewProject }: Props) {
                 <div className={styles.cardDesc}>{project.description}</div>
               </div>
               <span className={styles.status} style={{ color: STATUS_COLOR[project.status] }}>
-                {STATUS_LABEL[project.status]}
+                {STATUS_DOT[project.status]} {STATUS_LABEL[project.status]}
               </span>
             </div>
 
@@ -147,24 +154,24 @@ export default function Dashboard({ onOpenCanvas, onNewProject }: Props) {
 
             {/* Meta */}
             <div className={styles.cardMeta}>
-              <span>📦 {project.stack}</span>
-              {project.deployTarget && <span>🚀 {project.deployTarget}</span>}
-              <span>🕐 {project.lastActive}</span>
+              <span>{project.stack}</span>
+              {project.deployTarget && <span>Deploy: {project.deployTarget}</span>}
+              <span>Last active: {project.lastActive}</span>
             </div>
 
             {/* Chips */}
             <div className={styles.chips}>
               <span className={styles.chip}>
-                ✓ {project.sectionsDone}/{project.sectionsTotal} sections
+                {project.sectionsDone}/{project.sectionsTotal} sections
               </span>
               {project.openBugs > 0 && (
                 <span className={`${styles.chip} ${styles.chipRed}`}>
-                  🐛 {project.openBugs} bugs
+                  {project.openBugs} {project.openBugs === 1 ? 'bug' : 'bugs'}
                 </span>
               )}
               {project.openTangents > 0 && (
                 <span className={`${styles.chip} ${styles.chipYellow}`}>
-                  ↘ {project.openTangents} tangents
+                  {project.openTangents} {project.openTangents === 1 ? 'tangent' : 'tangents'}
                 </span>
               )}
             </div>
