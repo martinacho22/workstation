@@ -1,0 +1,69 @@
+.node {
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  cursor: default;
+  min-width: 480px;
+}
+
+.node:hover {
+  border-color: var(--border-default);
+}
+
+.selected {
+  border-color: var(--border-bright);
+}
+
+.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-dim), 0 0 24px var(--accent-glow);
+}
+
+.done {
+  opacity: 0.5;
+  filter: saturate(0.4);
+}
+
+.body {
+  display: flex;
+  height: 280px;
+  overflow: hidden;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+.terminalPane {
+  flex: 1;
+  overflow: hidden;
+  border-radius: 0 0 0 var(--radius-lg);
+}
+
+.chatPane {
+  flex: 1;
+  overflow: hidden;
+  border-radius: 0 0 var(--radius-lg) 0;
+}
+
+.divider {
+  width: 1px;
+  background: var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.handle {
+  width: 8px;
+  height: 8px;
+  background: var(--border-bright);
+  border: 1px solid var(--surface-1);
+  border-radius: 50%;
+  transition: background 0.2s;
+}
+
+.handle:hover {
+  background: var(--accent);
+}
+
+.handleBottom {
+  composes: handle;
+  bottom: -4px;
+}
