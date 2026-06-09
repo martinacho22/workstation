@@ -1,21 +1,20 @@
 .page {
   flex: 1;
-  height: 100vh;
   overflow-y: auto;
   padding: 40px 48px;
   background: var(--bg);
-  color: var(--text);
 }
 
 .header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 28px;
+  margin-bottom: 32px;
+  gap: 24px;
 }
 
 .title {
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 700;
   color: #fff;
   margin: 0 0 4px;
@@ -23,22 +22,28 @@
 }
 
 .subtitle {
-  font-size: 14px;
-  color: rgba(255,255,255,0.35);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.35);
   margin: 0;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
 }
 
 .progressPill {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
+  align-items: center;
+  gap: 12px;
 }
 
 .progressBar {
-  width: 200px;
-  height: 4px;
-  background: rgba(255,255,255,0.06);
+  width: 160px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
   border-radius: 2px;
   overflow: hidden;
 }
@@ -47,14 +52,28 @@
   height: 100%;
   background: var(--accent);
   border-radius: 2px;
-  box-shadow: 0 0 8px rgba(0,255,136,0.4);
-  transition: width 0.4s;
+  transition: width 0.3s ease;
 }
 
 .progressLabel {
-  font-size: 11px;
-  color: rgba(255,255,255,0.35);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.3);
+  white-space: nowrap;
 }
+
+.exportBtn {
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.exportBtn:hover { background: rgba(0, 255, 136, 0.08); }
 
 /* Tabs */
 .tabs {
@@ -66,142 +85,349 @@
 }
 
 .tab {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  padding: 8px 16px;
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
-  color: rgba(255,255,255,0.4);
+  color: rgba(255, 255, 255, 0.35);
   font-size: 13px;
-  padding: 8px 14px 10px;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   transition: color 0.15s;
   margin-bottom: -1px;
 }
-
-.tab:hover { color: rgba(255,255,255,0.75); }
+.tab:hover { color: rgba(255, 255, 255, 0.6); }
 
 .activeTab {
-  color: var(--accent) !important;
+  color: #fff;
   border-bottom-color: var(--accent);
 }
 
 .tabCount {
-  background: rgba(255,255,255,0.08);
-  border-radius: 20px;
   padding: 1px 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
   font-size: 10px;
-  color: rgba(255,255,255,0.4);
+  color: rgba(255, 255, 255, 0.4);
 }
 
 /* Content */
-.content { flex: 1; }
+.content {
+  flex: 1;
+}
 
+/* Overview grid */
 .overviewGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 12px;
 }
 
+/* Alert card */
 .alertCard {
   grid-column: 1 / -1;
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  background: rgba(248,113,113,0.06);
-  border: 1px solid rgba(248,113,113,0.18);
-  border-radius: 10px;
-  padding: 14px 18px;
+  padding: 14px 16px;
+  background: rgba(240, 192, 64, 0.05);
+  border: 1px solid rgba(240, 192, 64, 0.15);
+  border-radius: var(--radius);
 }
 
-.alertIcon { font-size: 18px; flex-shrink: 0; }
-.alertTitle { font-size: 13px; font-weight: 600; color: #f87171; margin-bottom: 2px; }
-.alertDesc { font-size: 12px; color: rgba(255,255,255,0.35); }
+.alertIndicator {
+  width: 3px;
+  height: 100%;
+  min-height: 32px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.alertTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 3px;
+}
+
+.alertDesc {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.35);
+}
 
 /* List */
 .list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 1px;
 }
 
 .listItem {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 9px;
   padding: 14px 16px;
-  transition: border-color 0.15s;
+  background: var(--surface);
+  border-radius: var(--radius);
+  gap: 12px;
 }
-
-.listItem:hover { border-color: rgba(0,255,136,0.12); }
 
 .listItemLeft {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
 }
 
 .listItemName {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: #fff;
+  margin-bottom: 2px;
 }
 
 .listItemSub {
-  font-size: 12px;
-  color: rgba(255,255,255,0.3);
-  margin-top: 2px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.3);
 }
 
 .blockedReason {
   font-size: 11px;
   color: #f0c040;
-  margin-top: 3px;
+  margin-top: 2px;
 }
 
 .statusBadge {
   font-size: 11px;
-  font-weight: 600;
-  padding: 3px 10px;
-  border-radius: 20px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.4);
   text-transform: capitalize;
-  background: rgba(255,255,255,0.05);
-  color: rgba(255,255,255,0.4);
-  border: 1px solid rgba(255,255,255,0.08);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.statusBadge[data-status="done"]    { background: rgba(74, 222, 128, 0.1); color: #4ade80; }
+.statusBadge[data-status="blocked"] { background: rgba(240, 192, 64, 0.1); color: #f0c040; }
+.statusBadge[data-status="active"]  { background: rgba(0, 255, 136, 0.1); color: var(--accent); }
+
+.bugDot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #f87171;
+  flex-shrink: 0; margin-top: 5px;
 }
 
-.statusBadge[data-status="done"] {
-  background: rgba(74,222,128,0.08);
-  color: #4ade80;
-  border-color: rgba(74,222,128,0.2);
+.tangentDot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0; margin-top: 5px;
 }
 
-.statusBadge[data-status="active"] {
-  background: rgba(0,255,136,0.08);
-  color: var(--accent);
-  border-color: rgba(0,255,136,0.2);
+.handoffDot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0; margin-top: 5px;
 }
 
-.statusBadge[data-status="blocked"] {
-  background: rgba(240,192,64,0.08);
-  color: #f0c040;
-  border-color: rgba(240,192,64,0.2);
+.deployDot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #00c8ff;
+  flex-shrink: 0; margin-top: 5px;
 }
 
-.handoffItem { cursor: pointer; }
-
+.handoffItem { align-items: flex-start; }
 .viewBtn {
-  background: rgba(0,255,136,0.08);
-  border: 1px solid rgba(0,255,136,0.2);
-  color: var(--accent);
-  border-radius: 7px;
-  padding: 6px 12px;
+  padding: 5px 12px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: rgba(255,255,255,0.4);
+  font-size: 11px;
+  cursor: pointer;
+}
+.viewBtn:hover { color: #fff; border-color: rgba(255,255,255,0.2); }
+
+/* ADRs */
+.adrPanel { display: flex; flex-direction: column; gap: 16px; }
+
+.adrHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.adrHeaderText {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.addAdrBtn {
+  padding: 7px 14px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: rgba(255,255,255,0.5);
   font-size: 12px;
   cursor: pointer;
-  transition: background 0.15s;
+  white-space: nowrap;
 }
-.viewBtn:hover { background: rgba(0,255,136,0.15); }
+.addAdrBtn:hover { border-color: var(--accent); color: var(--accent); }
+
+.adrForm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.adrInput {
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: #fff;
+  font-size: 13px;
+  outline: none;
+}
+.adrInput:focus { border-color: var(--accent); }
+.adrInput::placeholder { color: rgba(255,255,255,0.2); }
+
+.saveAdrBtn {
+  padding: 8px 16px;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.adrItem {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  gap: 12px;
+}
+
+.adrItemLeft {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex: 1;
+}
+
+.adrDot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0; margin-top: 5px;
+}
+
+.adrTitle { font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 3px; }
+.adrDecision { font-size: 12px; color: rgba(255,255,255,0.5); margin-bottom: 2px; }
+.adrReason { font-size: 11px; color: rgba(255,255,255,0.25); }
+
+.deleteAdrBtn {
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.2);
+  font-size: 11px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.deleteAdrBtn:hover { color: #f87171; }
+
+/* Checklist */
+.checklistPanel { display: flex; flex-direction: column; gap: 16px; }
+
+.checklistHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.checklistHeaderText {
+  font-size: 12px;
+  color: rgba(255,255,255,0.3);
+}
+
+.generateChecklistBtn {
+  padding: 7px 14px;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.generateChecklistBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.checklist { display: flex; flex-direction: column; gap: 4px; }
+
+.checklistItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.checklistItem:hover { background: var(--surface2); }
+
+.checklistItemDone { opacity: 0.5; }
+
+.checkbox {
+  width: 16px; height: 16px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; color: #000;
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+.checkboxDone { background: var(--accent); border-color: var(--accent); }
+
+.checklistLabel {
+  flex: 1;
+  font-size: 13px;
+  color: rgba(255,255,255,0.8);
+}
+
+.checklistSection {
+  font-size: 10px;
+  color: rgba(255,255,255,0.2);
+  padding: 2px 7px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 4px;
+}
+
+.allDone {
+  padding: 16px;
+  background: rgba(0, 255, 136, 0.05);
+  border: 1px solid rgba(0, 255, 136, 0.15);
+  border-radius: var(--radius);
+  font-size: 13px;
+  color: var(--accent);
+  text-align: center;
+}
