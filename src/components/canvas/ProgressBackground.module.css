@@ -1,0 +1,31 @@
+.bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 255, 136, 0.03) 0%,
+    rgba(0, 255, 136, 0.015) 80%,
+    transparent 100%
+  );
+  transition: width 1s ease;
+}
+
+.complete {
+  animation: completePulse 1.2s ease-out forwards;
+}
+
+@keyframes completePulse {
+  0%   { background: linear-gradient(90deg, rgba(0,255,136,0.03), transparent); }
+  50%  { background: linear-gradient(90deg, rgba(0,255,136,0.12), rgba(0,255,136,0.06)); }
+  100% { background: linear-gradient(90deg, rgba(0,255,136,0.05), rgba(0,255,136,0.02)); }
+}
