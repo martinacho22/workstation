@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { WorkstationNodeData, ChatMessage } from '@/types'
 import { useWorkstationStore } from '@/store/useWorkstationStore'
+import { streamClaude } from '@/lib/claudeRunner'
 import { nanoid } from 'nanoid'
 import styles from './ChatPane.module.css'
 
@@ -10,14 +11,16 @@ interface Props {
 }
 
 export default function ChatPane({ nodeId, data }: Props) {
-  const { addChatMessage, project } = useWorkstationStore()
+  const { addChatMessage, project, apiKey } = useWorkstationStore()
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [streamBuffer, setStreamBuffer] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
+  const streamIdRef = useRef<string>('')
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [data.chatHistory])
+  }, [data.chatHistory, streamBuffer])
 
   async function send() {
     if (!input.trim() || loading) return
@@ -32,47 +35,61 @@ export default function ChatPane({ nodeId, data }: Props) {
     addChatMessage(nodeId, userMsg)
     setInput('')
     setLoading(true)
+    setStreamBuffer('')
+
+    const enabledSkills = data.skills.filter(s => s.enabled).map(s => s.label).join(', ')
+
+    // Build a rich prompt that includes chat history as context
+    // (CLI doesn't have stateful sessions in -p mode, so we inline history)
+    const historyContext = data.chatHistory
+      .slice(-10) // last 10 messages for context window
+      .map(m => `${m.role === 'user' ? 'Human' : 'Assistant'}: ${m.content}`)
+      .join('\n')
+
+    const systemPrompt = [
+      `You are a senior developer assistant inside Workstation.`,
+      project ? `Project: ${project.name}. Stack: ${project.stack}. ${project.description}` : '',
+      `Current section: "${data.label}".`,
+      enabledSkills ? `Active skills: ${enabledSkills}.` : '',
+      data.handoffDoc ? `Last handoff: ${data.handoffDoc.currentStatus}. Next: ${data.handoffDoc.nextSteps}` : '',
+      `Be concise. Think step by step. Terminal-first.`,
+    ].filter(Boolean).join('\n')
+
+    const fullPrompt = historyContext
+      ? `${historyContext}\nHuman: ${userMsg.content}`
+      : userMsg.content
+
+    const streamId = nanoid(8)
+    streamIdRef.current = streamId
 
     try {
-      // Build system context from project + node + skills
-      const enabledSkills = data.skills.filter(s => s.enabled).map(s => s.label).join(', ')
-      const systemPrompt = [
-        `You are a senior developer assistant inside Workstation.`,
-        project ? `Project: ${project.name}. Stack: ${project.stack}. ${project.description}` : '',
-        `Current section: "${data.label}".`,
-        enabledSkills ? `Active skills: ${enabledSkills}.` : '',
-        data.handoffDoc ? `Last handoff: ${data.handoffDoc.currentStatus}. Next: ${data.handoffDoc.nextSteps}` : '',
-        `Be concise. Think step by step. Reason before acting. Terminal-first.`,
-      ].filter(Boolean).join('\n')
+      let accumulated = ''
 
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': (window as any).__ANTHROPIC_KEY__ || '',
-          'anthropic-version': '2023-06-01',
+      const fullText = await streamClaude(
+        fullPrompt,
+        (chunk) => {
+          accumulated += chunk
+          setStreamBuffer(accumulated)
         },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-5',
-          max_tokens: 1024,
-          system: systemPrompt,
-          messages: [
-            ...data.chatHistory.map(m => ({ role: m.role, content: m.content })),
-            { role: 'user', content: userMsg.content },
-          ],
-        }),
-      })
+        {
+          streamId,
+          apiKey,
+          skipPermissions: data.skipPermissions,
+          systemPrompt,
+          maxTokens: 1024,
+        }
+      )
 
-      const json = await res.json()
-      const content = json.content?.[0]?.text || 'No response.'
+      setStreamBuffer('')
 
       addChatMessage(nodeId, {
         id: nanoid(),
         role: 'assistant',
-        content,
+        content: fullText || accumulated,
         timestamp: Date.now(),
       })
     } catch (err) {
+      setStreamBuffer('')
       addChatMessage(nodeId, {
         id: nanoid(),
         role: 'assistant',
@@ -88,11 +105,11 @@ export default function ChatPane({ nodeId, data }: Props) {
     <div className={styles.pane}>
       <div className={styles.toolbar}>
         <span className={styles.label}>Chat</span>
-        <span className={styles.model}>claude-sonnet</span>
+        <span className={styles.model}>claude · cli</span>
       </div>
 
       <div className={styles.messages}>
-        {data.chatHistory.length === 0 && (
+        {data.chatHistory.length === 0 && !loading && (
           <div className={styles.empty}>
             Ask Claude anything about this section.<br />
             Code runs in the terminal →
@@ -107,7 +124,11 @@ export default function ChatPane({ nodeId, data }: Props) {
         {loading && (
           <div className={`${styles.msg} ${styles.assistant}`}>
             <span className={styles.roleLabel}>claude</span>
-            <span className={styles.typing}>●●●</span>
+            {streamBuffer ? (
+              <pre className={styles.content}>{streamBuffer}<span className={styles.cursor}>▌</span></pre>
+            ) : (
+              <span className={styles.typing}>●●●</span>
+            )}
           </div>
         )}
         <div ref={bottomRef} />
