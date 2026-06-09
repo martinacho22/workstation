@@ -1,8 +1,14 @@
 // ─── Node Types ───────────────────────────────────────────────────────────────
 
-export type NodeKind = 'overview' | 'section' | 'tangent' | 'handoff'
+export type NodeKind = 'overview' | 'section' | 'tangent' | 'handoff' | 'deploy' | 'bug'
 
 export type NodeStatus = 'idle' | 'active' | 'done' | 'blocked' | 'minimized'
+
+export interface BlockedReason {
+  reason: string
+  blockedBy?: string   // nodeId that is blocking this
+  since: number
+}
 
 export interface WorkstationNodeData {
   id: string
@@ -14,10 +20,23 @@ export interface WorkstationNodeData {
   handoffDoc?: HandoffDoc
   skills: Skill[]
   skipPermissions: boolean
-  parentId?: string       // for tangents — which node spawned this
-  resolvedTo?: string     // for tangents — which node it tied back to
+  parentId?: string        // for tangents/bugs — which node spawned this
+  resolvedTo?: string      // for tangents — which node it tied back to
+  blockedReason?: BlockedReason
+  // Deploy node
+  deployTarget?: DeployTarget
+  deployStatus?: DeployStatus
+  deployUrl?: string
+  envVars?: EnvVar[]
+  // Bug node
+  bugDescription?: string
+  bugStepsToReproduce?: string
+  bugAffectedSection?: string
+  // Context injection
+  contextFile?: string     // auto-generated context injected into every terminal session
   createdAt: number
   updatedAt: number
+  [key: string]: unknown
 }
 
 // ─── Chat ─────────────────────────────────────────────────────────────────────
@@ -72,16 +91,60 @@ export interface Skill {
 
 // ─── Project ──────────────────────────────────────────────────────────────────
 
+export interface BlueprintSection {
+  label: string
+  description: string
+  dependsOn: string[]   // labels of sections this depends on
+}
+
 export interface Project {
   id: string
   name: string
   description: string
   stack: string
+  deployTarget: DeployTarget
   accentColor: string
+  blueprint?: BlueprintSection[]
+  adrs?: ArchitectureDecisionRecord[]
   createdAt: number
   updatedAt: number
+}
+
+export interface ArchitectureDecisionRecord {
+  id: string
+  title: string
+  decision: string
+  reason: string
+  createdAt: number
 }
 
 // ─── Canvas Edge ─────────────────────────────────────────────────────────────
 
 export type EdgeKind = 'flow' | 'tangent-open' | 'tangent-resolved' | 'tieback'
+
+// ─── Deploy ──────────────────────────────────────────────────────────────────
+
+export type DeployTarget = 'vercel' | 'railway' | 'fly' | 'netlify' | 'none'
+
+export type DeployStatus = 'idle' | 'preflight' | 'deploying' | 'live' | 'failed'
+
+export interface EnvVar {
+  key: string
+  value: string
+  isSet: boolean
+}
+
+// ─── Context File ─────────────────────────────────────────────────────────────
+
+export interface ProjectContext {
+  projectName: string
+  projectDescription: string
+  stack: string
+  deployTarget: string
+  sections: { label: string; status: string; description?: string }[]
+  adrs: { title: string; decision: string; reason: string }[]
+  currentSection?: string
+  currentSectionPurpose?: string
+  openTangents: { label: string; parentSection: string }[]
+  handoffSummary?: string
+}
