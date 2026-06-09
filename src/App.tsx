@@ -13,17 +13,17 @@ import {
 import '@xyflow/react/dist/style.css'
 
 import { useWorkstationStore } from '@/store/useWorkstationStore'
-import SectionNode       from '@/components/nodes/SectionNode'
-import OverviewNode      from '@/components/nodes/OverviewNode'
-import HandoffNode       from '@/components/nodes/HandoffNode'
-import DeployNode        from '@/components/nodes/DeployNode'
-import BugNode           from '@/components/nodes/BugNode'
-import MinimizedPills    from '@/components/canvas/MinimizedPills'
-import Toolbar           from '@/components/canvas/Toolbar'
-import RoadmapOverlay    from '@/components/canvas/RoadmapOverlay'
-import ProjectSetup      from '@/components/canvas/ProjectSetup'
+import SectionNode        from '@/components/nodes/SectionNode'
+import OverviewNode       from '@/components/nodes/OverviewNode'
+import HandoffNode        from '@/components/nodes/HandoffNode'
+import DeployNode         from '@/components/nodes/DeployNode'
+import BugNode            from '@/components/nodes/BugNode'
+import MinimizedPills     from '@/components/canvas/MinimizedPills'
+import Toolbar            from '@/components/canvas/Toolbar'
+import RoadmapOverlay     from '@/components/canvas/RoadmapOverlay'
+import ProjectSetup       from '@/components/canvas/ProjectSetup'
 import ProgressBackground from '@/components/canvas/ProgressBackground'
-import ApiKeyModal       from '@/components/canvas/ApiKeyModal'
+import ApiKeyModal        from '@/components/canvas/ApiKeyModal'
 import { FlowEdge, TangentEdge, TiebackEdge } from '@/components/edges'
 
 import Sidebar    from '@/components/layout/Sidebar'
@@ -31,6 +31,7 @@ import Dashboard  from '@/screens/Dashboard'
 import WarRoom    from '@/screens/WarRoom'
 import Projects   from '@/screens/Projects'
 import Settings   from '@/screens/Settings'
+import Setup      from '@/screens/Setup'
 import { Screen } from '@/types/screens'
 
 const nodeTypes: NodeTypes = {
@@ -47,6 +48,8 @@ const edgeTypes: EdgeTypes = {
   tiebackEdge: TiebackEdge,
 }
 
+const SETUP_DONE_KEY = 'workstation_setup_complete'
+
 export default function App() {
   const {
     nodes, edges,
@@ -56,10 +59,19 @@ export default function App() {
     setActiveNode,
   } = useWorkstationStore()
 
-  const [screen, setScreen]       = useState<Screen>('dashboard')
-  const [showSetup, setShowSetup] = useState(false)
+  const [screen, setScreen]         = useState<Screen>('dashboard')
+  const [showSetup, setShowSetup]   = useState(false)
+  const [showCLISetup, setShowCLISetup] = useState(false)
 
   const sidebarCollapsed = screen === 'canvas'
+
+  // On mount: check if setup has been completed before
+  useEffect(() => {
+    const done = localStorage.getItem(SETUP_DONE_KEY)
+    if (!done) {
+      setShowCLISetup(true)
+    }
+  }, [])
 
   const onConnect = useCallback(() => {}, [])
 
@@ -70,6 +82,11 @@ export default function App() {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [setActiveNode])
+
+  function handleSetupComplete() {
+    localStorage.setItem(SETUP_DONE_KEY, 'true')
+    setShowCLISetup(false)
+  }
 
   function handleOpenCanvas(_projectId: string) {
     setShowSetup(false)
@@ -92,6 +109,11 @@ export default function App() {
 
   function handleWarRoom() {
     setScreen('warroom')
+  }
+
+  // Show CLI setup wizard on first launch (full screen, before anything else)
+  if (showCLISetup) {
+    return <Setup onComplete={handleSetupComplete} />
   }
 
   return (
@@ -126,31 +148,6 @@ export default function App() {
             <>
               <ProgressBackground />
 
-              {/* API key warning — no emoji */}
-              {!apiKey && (
-                <div
-                  onClick={showApiKeyModal}
-                  style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 56,
-                    right: 0,
-                    zIndex: 50,
-                    background: 'rgba(240,165,0,0.1)',
-                    borderBottom: '1px solid rgba(240,165,0,0.25)',
-                    color: '#f0c040',
-                    fontSize: '12px',
-                    textAlign: 'center',
-                    padding: '6px',
-                    cursor: 'pointer',
-                    letterSpacing: '0.03em',
-                  }}
-                >
-                  No API key set — reasoning chat and handoff docs won't work.{' '}
-                  <span style={{ textDecoration: 'underline' }}>Click to add your key</span>
-                </div>
-              )}
-
               <ReactFlow
                 nodes={nodes}
                 edges={edges}
@@ -165,7 +162,7 @@ export default function App() {
                 minZoom={0.15}
                 maxZoom={2}
                 proOptions={{ hideAttribution: true }}
-                style={{ background: 'transparent', marginTop: apiKey ? 0 : 32 }}
+                style={{ background: 'transparent' }}
                 onPaneClick={() => setActiveNode(null)}
               >
                 <Background
