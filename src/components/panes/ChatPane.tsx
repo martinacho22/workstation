@@ -8,10 +8,11 @@ import styles from './ChatPane.module.css'
 interface Props {
   nodeId: string
   data: WorkstationNodeData
+  systemContext?: string
 }
 
-export default function ChatPane({ nodeId, data }: Props) {
-  const { addChatMessage, project, apiKey } = useWorkstationStore()
+export default function ChatPane({ nodeId, data, systemContext }: Props) {
+  const { addChatMessage, project } = useWorkstationStore()
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [streamBuffer, setStreamBuffer] = useState('')
@@ -37,16 +38,17 @@ export default function ChatPane({ nodeId, data }: Props) {
     setLoading(true)
     setStreamBuffer('')
 
-    const enabledSkills = data.skills.filter(s => s.enabled).map(s => s.label).join(', ')
+    const enabledSkills = data.skills?.filter(s => s.enabled).map(s => s.label).join(', ') || ''
 
-    // Build a rich prompt that includes chat history as context
-    // (CLI doesn't have stateful sessions in -p mode, so we inline history)
+    // Inline history — CLI -p mode is stateless so we pass context manually
     const historyContext = data.chatHistory
-      .slice(-10) // last 10 messages for context window
+      .slice(-10)
       .map(m => `${m.role === 'user' ? 'Human' : 'Assistant'}: ${m.content}`)
       .join('\n')
 
-    const systemPrompt = [
+    // Use custom systemContext if provided (e.g. from BugNode/DeployNode),
+    // otherwise build standard section context
+    const systemPrompt = systemContext || [
       `You are a senior developer assistant inside Workstation.`,
       project ? `Project: ${project.name}. Stack: ${project.stack}. ${project.description}` : '',
       `Current section: "${data.label}".`,
@@ -73,10 +75,8 @@ export default function ChatPane({ nodeId, data }: Props) {
         },
         {
           streamId,
-          apiKey,
           skipPermissions: data.skipPermissions,
           systemPrompt,
-          maxTokens: 1024,
         }
       )
 
