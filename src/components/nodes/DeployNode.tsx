@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Handle, Position } from '@xyflow/react'
-import { useWorkstationStore } from '@xyflow/react'
-import { useWorkstationStore as useStore } from '@/store/useWorkstationStore'
+import { useWorkstationStore } from '@/store/useWorkstationStore'
 import { WorkstationNodeData, DeployTarget } from '@/types'
 import NodeHeader from './NodeHeader'
 import ChatPane from '../panes/ChatPane'
@@ -46,8 +45,8 @@ interface Props {
 }
 
 export default function DeployNode({ data, id }: Props) {
-  const { updateEnvVar, addEnvVar, updateNodeStatus } = useStore()
-  const project = useStore(s => s.project)
+  const { updateEnvVar, addEnvVar, updateNodeStatus } = useWorkstationStore()
+  const project = useWorkstationStore(s => s.project)
   const [tab, setTab] = useState<'checklist' | 'env' | 'commands' | 'chat'>('checklist')
   const [checked, setChecked] = useState<Record<string, boolean>>({})
   const [newKey, setNewKey] = useState('')
