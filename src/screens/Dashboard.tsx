@@ -1,89 +1,71 @@
 import { useState } from 'react'
+import { useWorkstationStore } from '@/store/useWorkstationStore'
+import { ProjectMeta } from '@/types'
 import styles from './Dashboard.module.css'
 
-interface Project {
-  id: string
-  name: string
-  description: string
-  stack: string
-  progress: number
-  sectionsTotal: number
-  sectionsDone: number
-  openBugs: number
-  openTangents: number
-  lastActive: string
-  status: 'active' | 'blocked' | 'done' | 'idle'
-  deployTarget?: string
-}
-
-const MOCK_PROJECTS: Project[] = [
-  {
-    id: '1',
-    name: 'Workstation',
-    description: 'Infinite canvas for developers using Claude',
-    stack: 'Electron + React + TypeScript',
-    progress: 60,
-    sectionsTotal: 8,
-    sectionsDone: 5,
-    openBugs: 2,
-    openTangents: 1,
-    lastActive: '2 hours ago',
-    status: 'active',
-    deployTarget: 'Electron',
-  },
-  {
-    id: '2',
-    name: 'Pure Fusion Engine',
-    description: 'Autonomous Meta ads AI engine',
-    stack: 'FastAPI + Next.js + Supabase',
-    progress: 35,
-    sectionsTotal: 10,
-    sectionsDone: 4,
-    openBugs: 0,
-    openTangents: 3,
-    lastActive: '1 day ago',
-    status: 'blocked',
-    deployTarget: 'Railway',
-  },
-]
-
-const STATUS_COLOR: Record<Project['status'], string> = {
+const STATUS_COLOR: Record<ProjectMeta['status'], string> = {
   active:  'var(--accent)',
   blocked: '#f0c040',
   done:    '#4ade80',
   idle:    'rgba(255,255,255,0.2)',
 }
 
-const STATUS_LABEL: Record<Project['status'], string> = {
+const STATUS_LABEL: Record<ProjectMeta['status'], string> = {
   active:  'Active',
   blocked: 'Blocked',
   done:    'Done',
   idle:    'Idle',
 }
 
-const STATUS_DOT: Record<Project['status'], string> = {
+const STATUS_DOT: Record<ProjectMeta['status'], string> = {
   active:  '●',
   blocked: '▲',
   done:    '✓',
   idle:    '○',
 }
 
+function timeAgo(ts: number): string {
+  const diff = Date.now() - ts
+  const mins  = Math.floor(diff / 60000)
+  const hours = Math.floor(diff / 3600000)
+  const days  = Math.floor(diff / 86400000)
+  if (mins < 2)   return 'just now'
+  if (mins < 60)  return `${mins}m ago`
+  if (hours < 24) return `${hours}h ago`
+  return `${days}d ago`
+}
+
 interface Props {
   onOpenCanvas: (projectId: string) => void
   onNewProject: () => void
+  onWarRoom: () => void
 }
 
-export default function Dashboard({ onOpenCanvas, onNewProject }: Props) {
+export default function Dashboard({ onOpenCanvas, onNewProject, onWarRoom }: Props) {
+  const { getProjectMetas, switchProject, deleteProject } = useWorkstationStore()
   const [search, setSearch] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
-  const filtered = MOCK_PROJECTS.filter(p =>
-    p.name.toLowerCase().includes(search.toLowerCase())
+  const metas = getProjectMetas()
+  const filtered = metas.filter(p =>
+    p.name.toLowerCase().includes(search.toLowerCase()) ||
+    p.description.toLowerCase().includes(search.toLowerCase())
   )
 
-  const totalProjects  = MOCK_PROJECTS.length
-  const activeProjects = MOCK_PROJECTS.filter(p => p.status === 'active').length
-  const totalBugs      = MOCK_PROJECTS.reduce((a, p) => a + p.openBugs, 0)
-  const totalTangents  = MOCK_PROJECTS.reduce((a, p) => a + p.openTangents, 0)
+  const totalProjects  = metas.length
+  const activeProjects = metas.filter(p => p.status === 'active').length
+  const totalBugs      = metas.reduce((a, p) => a + p.openBugs, 0)
+  const totalTangents  = metas.reduce((a, p) => a + p.openTangents, 0)
+
+  function handleOpen(id: string) {
+    switchProject(id)
+    onOpenCanvas(id)
+  }
+
+  function handleDelete(id: string) {
+    deleteProject(id)
+    setConfirmDelete(null)
+  }
 
   return (
     <div className={styles.page}>
@@ -126,77 +108,111 @@ export default function Dashboard({ onOpenCanvas, onNewProject }: Props) {
         />
       </div>
 
+      {/* Empty state */}
+      {metas.length === 0 && (
+        <div className={styles.emptyState}>
+          <div className={styles.emptyTitle}>No projects yet</div>
+          <div className={styles.emptyDesc}>Create your first project to get started.</div>
+          <button className={styles.newBtn} onClick={onNewProject}>+ New Project</button>
+        </div>
+      )}
+
       {/* Project Cards */}
-      <div className={styles.grid}>
-        {filtered.map(project => (
-          <div key={project.id} className={styles.card}>
-            {/* Card Header */}
-            <div className={styles.cardHeader}>
-              <div>
-                <div className={styles.cardName}>{project.name}</div>
-                <div className={styles.cardDesc}>{project.description}</div>
-              </div>
-              <span className={styles.status} style={{ color: STATUS_COLOR[project.status] }}>
-                {STATUS_DOT[project.status]} {STATUS_LABEL[project.status]}
-              </span>
-            </div>
-
-            {/* Progress */}
-            <div className={styles.progressRow}>
-              <div className={styles.progressBar}>
-                <div
-                  className={styles.progressFill}
-                  style={{ width: `${project.progress}%` }}
-                />
-              </div>
-              <span className={styles.progressLabel}>{project.progress}%</span>
-            </div>
-
-            {/* Meta */}
-            <div className={styles.cardMeta}>
-              <span>{project.stack}</span>
-              {project.deployTarget && <span>Deploy: {project.deployTarget}</span>}
-              <span>Last active: {project.lastActive}</span>
-            </div>
-
-            {/* Chips */}
-            <div className={styles.chips}>
-              <span className={styles.chip}>
-                {project.sectionsDone}/{project.sectionsTotal} sections
-              </span>
-              {project.openBugs > 0 && (
-                <span className={`${styles.chip} ${styles.chipRed}`}>
-                  {project.openBugs} {project.openBugs === 1 ? 'bug' : 'bugs'}
+      {metas.length > 0 && (
+        <div className={styles.grid}>
+          {filtered.map(project => (
+            <div key={project.id} className={styles.card}>
+              {/* Card Header */}
+              <div className={styles.cardHeader}>
+                <div>
+                  <div className={styles.cardName}>{project.name}</div>
+                  <div className={styles.cardDesc}>{project.description}</div>
+                </div>
+                <span className={styles.status} style={{ color: STATUS_COLOR[project.status] }}>
+                  {STATUS_DOT[project.status]} {STATUS_LABEL[project.status]}
                 </span>
-              )}
-              {project.openTangents > 0 && (
-                <span className={`${styles.chip} ${styles.chipYellow}`}>
-                  {project.openTangents} {project.openTangents === 1 ? 'tangent' : 'tangents'}
+              </div>
+
+              {/* Progress */}
+              <div className={styles.progressRow}>
+                <div className={styles.progressBar}>
+                  <div
+                    className={styles.progressFill}
+                    style={{ width: `${project.progress}%` }}
+                  />
+                </div>
+                <span className={styles.progressLabel}>{project.progress}%</span>
+              </div>
+
+              {/* Meta */}
+              <div className={styles.cardMeta}>
+                <span>{project.stack}</span>
+                {project.deployTarget && project.deployTarget !== 'none' && (
+                  <span>Deploy: {project.deployTarget}</span>
+                )}
+                <span>Last active: {timeAgo(project.lastActive)}</span>
+              </div>
+
+              {/* Chips */}
+              <div className={styles.chips}>
+                <span className={styles.chip}>
+                  {project.sectionsDone}/{project.sectionsTotal} sections
                 </span>
-              )}
-            </div>
+                {project.openBugs > 0 && (
+                  <span className={`${styles.chip} ${styles.chipRed}`}>
+                    {project.openBugs} {project.openBugs === 1 ? 'bug' : 'bugs'}
+                  </span>
+                )}
+                {project.openTangents > 0 && (
+                  <span className={`${styles.chip} ${styles.chipYellow}`}>
+                    {project.openTangents} {project.openTangents === 1 ? 'tangent' : 'tangents'}
+                  </span>
+                )}
+              </div>
 
-            {/* Actions */}
-            <div className={styles.cardActions}>
-              <button
-                className={styles.openBtn}
-                onClick={() => onOpenCanvas(project.id)}
-              >
-                Open Canvas →
-              </button>
-              <button className={styles.warBtn}>War Room</button>
+              {/* Actions */}
+              <div className={styles.cardActions}>
+                <button
+                  className={styles.openBtn}
+                  onClick={() => handleOpen(project.id)}
+                >
+                  Open Canvas
+                </button>
+                <button className={styles.warBtn} onClick={() => {
+                  switchProject(project.id)
+                  onWarRoom()
+                }}>
+                  War Room
+                </button>
+                {confirmDelete === project.id ? (
+                  <button
+                    className={styles.deleteConfirmBtn}
+                    onClick={() => handleDelete(project.id)}
+                  >
+                    Confirm Delete
+                  </button>
+                ) : (
+                  <button
+                    className={styles.deleteBtn}
+                    onClick={() => setConfirmDelete(project.id)}
+                    title="Delete project"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
 
-        {/* New Project Card */}
-        <div className={`${styles.card} ${styles.newCard}`} onClick={onNewProject}>
-          <div className={styles.newCardInner}>
-            <span className={styles.newCardIcon}>+</span>
-            <span className={styles.newCardLabel}>New Project</span>
+          {/* New Project Card */}
+          <div className={`${styles.card} ${styles.newCard}`} onClick={onNewProject}>
+            <div className={styles.newCardInner}>
+              <span className={styles.newCardIcon}>+</span>
+              <span className={styles.newCardLabel}>New Project</span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
