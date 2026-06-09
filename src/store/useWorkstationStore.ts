@@ -12,6 +12,7 @@ import {
 import {
   WorkstationNodeData,
   Project,
+  ProjectMeta,
   ChatMessage,
   EdgeKind,
   HandoffDoc,
@@ -20,25 +21,44 @@ import {
   DeployTarget,
   EnvVar,
   ProjectContext,
+  ArchitectureDecisionRecord,
+  CompletionChecklistItem,
 } from '@/types'
 import { nanoid } from 'nanoid'
 
 interface WorkstationState {
-  // Project
+  // ─── Multi-project ──────────────────────────────────────────────────────
+  projects: Project[]                        // registry of all projects
+  activeProjectId: string | null             // which project is open on canvas
+  createProject: (p: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => string
+  switchProject: (id: string) => void
+  deleteProject: (id: string) => void
+  getProjectMetas: () => ProjectMeta[]
+
+  // ─── Current project ────────────────────────────────────────────────────
   project: Project | null
   setProject: (p: Project) => void
 
-  // API Key
+  // ─── ADRs ───────────────────────────────────────────────────────────────
+  addAdr: (title: string, decision: string, reason: string) => void
+  deleteAdr: (id: string) => void
+
+  // ─── Completion checklist ────────────────────────────────────────────────
+  generateChecklist: () => Promise<void>
+  toggleChecklistItem: (id: string) => void
+  checklistLoading: boolean
+
+  // ─── API Key ────────────────────────────────────────────────────────────
   apiKey: string
   setApiKey: (key: string) => void
 
-  // Canvas
+  // ─── Canvas ─────────────────────────────────────────────────────────────
   nodes: Node<WorkstationNodeData>[]
   edges: Edge[]
   onNodesChange: (changes: NodeChange[]) => void
   onEdgesChange: (changes: EdgeChange[]) => void
 
-  // Node actions
+  // ─── Node actions ────────────────────────────────────────────────────────
   addSectionNode: (label: string, position?: { x: number; y: number }) => string
   addTangentNode: (parentId: string, label: string) => string
   addBugNode: (parentId: string, description: string) => string
@@ -54,40 +74,44 @@ interface WorkstationState {
   updateHandoffDoc: (nodeId: string, doc: HandoffDoc) => void
   addEnvVar: (nodeId: string, key: string) => void
   updateEnvVar: (nodeId: string, key: string, value: string) => void
+  setDefinitionOfDone: (nodeId: string, dod: string) => void
 
-  // Blueprint
+  // ─── Blueprint ──────────────────────────────────────────────────────────
   generateBlueprint: (idea: string) => Promise<void>
   applyBlueprint: (sections: BlueprintSection[]) => void
   blueprintLoading: boolean
   blueprintError: string | null
 
-  // Context injection
+  // ─── Context injection ───────────────────────────────────────────────────
   buildProjectContext: (nodeId?: string) => ProjectContext
   generateContextFile: (nodeId: string) => Promise<string>
 
-  // Active node
+  // ─── Final handoff export ────────────────────────────────────────────────
+  exportFinalHandoff: () => string
+
+  // ─── Active node ────────────────────────────────────────────────────────
   activeNodeId: string | null
   setActiveNode: (id: string | null) => void
 
-  // Roadmap overlay
+  // ─── Roadmap overlay ────────────────────────────────────────────────────
   roadmapVisible: boolean
   toggleRoadmap: () => void
 
-  // API key modal
+  // ─── API key modal ───────────────────────────────────────────────────────
   apiKeyModalVisible: boolean
   showApiKeyModal: () => void
   hideApiKeyModal: () => void
 }
 
 const DEFAULT_SKILLS = [
-  { id: 'memory' as const, label: 'Project Memory', enabled: true },
-  { id: 'web_search' as const, label: 'Web Search', enabled: false },
-  { id: 'code_review' as const, label: 'Code Review', enabled: true },
-  { id: 'architecture' as const, label: 'Architecture', enabled: false },
-  { id: 'debugging' as const, label: 'Debugging', enabled: true },
-  { id: 'documentation' as const, label: 'Docs', enabled: false },
-  { id: 'testing' as const, label: 'Testing', enabled: false },
-  { id: 'deployment' as const, label: 'Deploy', enabled: false },
+  { id: 'memory' as const,        label: 'Project Memory',  enabled: true  },
+  { id: 'web_search' as const,    label: 'Web Search',      enabled: false },
+  { id: 'code_review' as const,   label: 'Code Review',     enabled: true  },
+  { id: 'architecture' as const,  label: 'Architecture',    enabled: false },
+  { id: 'debugging' as const,     label: 'Debugging',       enabled: true  },
+  { id: 'documentation' as const, label: 'Docs',            enabled: false },
+  { id: 'testing' as const,       label: 'Testing',         enabled: false },
+  { id: 'deployment' as const,    label: 'Deploy',          enabled: false },
 ]
 
 function makeNode(
@@ -100,10 +124,10 @@ function makeNode(
   return {
     id,
     type:
-      kind === 'handoff' ? 'handoffNode'
+      kind === 'handoff'  ? 'handoffNode'
       : kind === 'overview' ? 'overviewNode'
-      : kind === 'deploy' ? 'deployNode'
-      : kind === 'bug' ? 'bugNode'
+      : kind === 'deploy'   ? 'deployNode'
+      : kind === 'bug'      ? 'bugNode'
       : 'sectionNode',
     position,
     data: {
@@ -121,7 +145,12 @@ function makeNode(
   }
 }
 
-async function callClaude(apiKey: string, model: string, prompt: string, maxTokens = 800): Promise<string> {
+async function callClaude(
+  apiKey: string,
+  model: string,
+  prompt: string,
+  maxTokens = 800
+): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -140,11 +169,216 @@ async function callClaude(apiKey: string, model: string, prompt: string, maxToke
   return json.content?.[0]?.text || ''
 }
 
+const INITIAL_NODES: Node<WorkstationNodeData>[] = [
+  makeNode('overview', 'Overview', { x: 80, y: 300 }),
+]
+
 export const useWorkstationStore = create<WorkstationState>()(
   persist(
     immer((set, get) => ({
+      // ─── Multi-project ────────────────────────────────────────────────────
+
+      projects: [],
+      activeProjectId: null,
+
+      createProject: (p) => {
+        const id = nanoid(10)
+        const now = Date.now()
+        const newProject: Project = { ...p, id, createdAt: now, updatedAt: now }
+        set((s) => {
+          s.projects.push(newProject)
+          s.activeProjectId = id
+          s.project = newProject
+          // Reset canvas for new project
+          s.nodes = [makeNode('overview', 'Overview', { x: 80, y: 300 })]
+          s.edges = []
+          s.activeNodeId = null
+        })
+        return id
+      },
+
+      switchProject: (id) => {
+        const state = get()
+        // Save current canvas state back into the current project
+        if (state.activeProjectId) {
+          set((s) => {
+            const current = s.projects.find(p => p.id === s.activeProjectId)
+            if (current) {
+              current.nodes = s.nodes as unknown[]
+              current.edges = s.edges as unknown[]
+              current.updatedAt = Date.now()
+            }
+          })
+        }
+        // Load the target project
+        set((s) => {
+          const target = s.projects.find(p => p.id === id)
+          if (target) {
+            s.activeProjectId = id
+            s.project = target
+            s.nodes = (target.nodes as Node<WorkstationNodeData>[]) ?? [makeNode('overview', 'Overview', { x: 80, y: 300 })]
+            s.edges = (target.edges as Edge[]) ?? []
+            s.activeNodeId = null
+          }
+        })
+      },
+
+      deleteProject: (id) => {
+        set((s) => {
+          s.projects = s.projects.filter(p => p.id !== id)
+          if (s.activeProjectId === id) {
+            s.activeProjectId = null
+            s.project = null
+            s.nodes = [makeNode('overview', 'Overview', { x: 80, y: 300 })]
+            s.edges = []
+          }
+        })
+      },
+
+      getProjectMetas: () => {
+        const { projects, nodes } = get()
+        return projects.map((p) => {
+          // Use live nodes if this is the active project, otherwise use saved snapshot
+          const projectNodes = p.id === get().activeProjectId
+            ? nodes
+            : (p.nodes as Node<WorkstationNodeData>[]) ?? []
+
+          const sectionNodes = projectNodes.filter(n => n.data?.kind === 'section')
+          const done         = sectionNodes.filter(n => n.data?.status === 'done').length
+          const blocked      = sectionNodes.filter(n => n.data?.status === 'blocked').length
+          const bugNodes     = projectNodes.filter(n => n.data?.kind === 'bug' && n.data?.status !== 'done')
+          const tangentNodes = projectNodes.filter(n => n.data?.kind === 'tangent' && !n.data?.resolvedTo)
+          const total        = sectionNodes.length
+          const progress     = total > 0 ? Math.round((done / total) * 100) : 0
+
+          let status: ProjectMeta['status'] = 'idle'
+          if (blocked > 0) status = 'blocked'
+          else if (done === total && total > 0) status = 'done'
+          else if (sectionNodes.some(n => n.data?.status === 'active')) status = 'active'
+          else if (total > 0) status = 'active'
+
+          return {
+            id: p.id,
+            name: p.name,
+            description: p.description,
+            stack: p.stack,
+            deployTarget: p.deployTarget,
+            accentColor: p.accentColor,
+            progress,
+            sectionsTotal: total,
+            sectionsDone: done,
+            openBugs: bugNodes.length,
+            openTangents: tangentNodes.length,
+            lastActive: p.updatedAt,
+            status,
+          } satisfies ProjectMeta
+        })
+      },
+
+      // ─── Current project ──────────────────────────────────────────────────
+
       project: null,
-      setProject: (p) => set((s) => { s.project = p }),
+      setProject: (p) => set((s) => {
+        s.project = p
+        // Upsert into projects array
+        const idx = s.projects.findIndex(x => x.id === p.id)
+        if (idx >= 0) s.projects[idx] = p
+        else s.projects.push(p)
+        s.activeProjectId = p.id
+      }),
+
+      // ─── ADRs ──────────────────────────────────────────────────────────────
+
+      addAdr: (title, decision, reason) => set((s) => {
+        if (!s.project) return
+        if (!s.project.adrs) s.project.adrs = []
+        s.project.adrs.push({
+          id: nanoid(6),
+          title,
+          decision,
+          reason,
+          createdAt: Date.now(),
+        })
+        s.project.updatedAt = Date.now()
+        // Sync into projects array
+        const idx = s.projects.findIndex(p => p.id === s.project?.id)
+        if (idx >= 0) s.projects[idx] = s.project
+      }),
+
+      deleteAdr: (id) => set((s) => {
+        if (!s.project?.adrs) return
+        s.project.adrs = s.project.adrs.filter(a => a.id !== id)
+        const idx = s.projects.findIndex(p => p.id === s.project?.id)
+        if (idx >= 0) s.projects[idx] = s.project!
+      }),
+
+      // ─── Completion checklist ─────────────────────────────────────────────
+
+      checklistLoading: false,
+
+      generateChecklist: async () => {
+        const state = get()
+        const apiKey = state.apiKey
+        if (!apiKey) { state.showApiKeyModal(); return }
+        if (!state.project) return
+
+        set((s) => { s.checklistLoading = true })
+
+        const sectionLabels = state.nodes
+          .filter(n => n.data?.kind === 'section')
+          .map(n => n.data.label)
+
+        const prompt = `You are a senior developer. Given these sections of a project called "${state.project.name}" (${state.project.stack}), generate a completion checklist.
+
+Sections: ${sectionLabels.join(', ')}
+
+Return ONLY a JSON array:
+[
+  { "label": "Checklist item description", "sectionId": "optional section label or null" }
+]
+
+Rules:
+- 8–14 items total
+- Cover: code complete, tests, env vars set, deploy working, error handling, README updated, live URL verified
+- Be specific and actionable
+- No markdown, no explanation — just the JSON array`
+
+        try {
+          const text = await callClaude(apiKey, 'claude-haiku-4-5', prompt, 800)
+          const match = text.match(/\[[\s\S]*\]/)
+          if (!match) throw new Error('No JSON array')
+
+          const items: { label: string; sectionId?: string }[] = JSON.parse(match[0])
+          const checklist: CompletionChecklistItem[] = items.map(item => ({
+            id: nanoid(6),
+            label: item.label,
+            done: false,
+            sectionId: item.sectionId ?? undefined,
+          }))
+
+          set((s) => {
+            if (s.project) {
+              s.project.completionChecklist = checklist
+              s.project.updatedAt = Date.now()
+              const idx = s.projects.findIndex(p => p.id === s.project?.id)
+              if (idx >= 0) s.projects[idx] = s.project!
+            }
+            s.checklistLoading = false
+          })
+        } catch {
+          set((s) => { s.checklistLoading = false })
+        }
+      },
+
+      toggleChecklistItem: (id) => set((s) => {
+        if (!s.project?.completionChecklist) return
+        const item = s.project.completionChecklist.find(i => i.id === id)
+        if (item) item.done = !item.done
+        const idx = s.projects.findIndex(p => p.id === s.project?.id)
+        if (idx >= 0) s.projects[idx] = s.project!
+      }),
+
+      // ─── API Key ───────────────────────────────────────────────────────────
 
       apiKey: '',
       setApiKey: (key) => set((s) => { s.apiKey = key }),
@@ -155,8 +389,9 @@ export const useWorkstationStore = create<WorkstationState>()(
 
       blueprintLoading: false,
       blueprintError: null,
+      checklistLoading: false,
 
-      nodes: [makeNode('overview', 'Overview', { x: 80, y: 300 })],
+      nodes: INITIAL_NODES,
       edges: [],
       activeNodeId: null,
       roadmapVisible: false,
@@ -170,7 +405,7 @@ export const useWorkstationStore = create<WorkstationState>()(
       setActiveNode: (id) => set((s) => { s.activeNodeId = id }),
       toggleRoadmap: () => set((s) => { s.roadmapVisible = !s.roadmapVisible }),
 
-      // ─── Add Nodes ────────────────────────────────────────────────────────
+      // ─── Add nodes ─────────────────────────────────────────────────────────
 
       addSectionNode: (label, position) => {
         const nodes = get().nodes
@@ -197,9 +432,7 @@ export const useWorkstationStore = create<WorkstationState>()(
           }
         })
 
-        // Auto-generate context file for the new section
         setTimeout(() => get().generateContextFile(node.id), 300)
-
         return node.id
       },
 
@@ -207,7 +440,9 @@ export const useWorkstationStore = create<WorkstationState>()(
         const parent = get().nodes.find(n => n.id === parentId)
         if (!parent) return ''
 
-        const existingTangents = get().nodes.filter(n => n.data.parentId === parentId && n.data.kind === 'tangent')
+        const existingTangents = get().nodes.filter(
+          n => n.data.parentId === parentId && n.data.kind === 'tangent'
+        )
         const xOffset = existingTangents.length * 280
         const pos = { x: parent.position.x + xOffset, y: parent.position.y + 360 }
         const node = makeNode('tangent', label, pos, { parentId })
@@ -231,7 +466,9 @@ export const useWorkstationStore = create<WorkstationState>()(
         const parent = get().nodes.find(n => n.id === parentId)
         if (!parent) return ''
 
-        const existingBugs = get().nodes.filter(n => n.data.parentId === parentId && n.data.kind === 'bug')
+        const existingBugs = get().nodes.filter(
+          n => n.data.parentId === parentId && n.data.kind === 'bug'
+        )
         const xOffset = existingBugs.length * 280
         const pos = { x: parent.position.x + xOffset, y: parent.position.y + 360 }
         const node = makeNode('bug', `Bug: ${description.slice(0, 30)}`, pos, {
@@ -260,9 +497,9 @@ export const useWorkstationStore = create<WorkstationState>()(
         const pos = { x: rightmost + 560, y: 300 }
 
         const defaultEnvVars: EnvVar[] = [
-          { key: 'NODE_ENV', value: 'production', isSet: true },
-          { key: 'DATABASE_URL', value: '', isSet: false },
-          { key: 'API_SECRET', value: '', isSet: false },
+          { key: 'NODE_ENV',      value: 'production', isSet: true  },
+          { key: 'DATABASE_URL',  value: '',           isSet: false },
+          { key: 'API_SECRET',    value: '',           isSet: false },
         ]
 
         const node = makeNode('deploy', `Deploy → ${target}`, pos, {
@@ -297,7 +534,7 @@ export const useWorkstationStore = create<WorkstationState>()(
         return node.id
       },
 
-      // ─── Node Actions ─────────────────────────────────────────────────────
+      // ─── Node actions ──────────────────────────────────────────────────────
 
       updateNodeStatus: (id, status, blockedReason) =>
         set((s) => {
@@ -362,6 +599,12 @@ export const useWorkstationStore = create<WorkstationState>()(
         })
       },
 
+      setDefinitionOfDone: (nodeId, dod) =>
+        set((s) => {
+          const node = s.nodes.find(n => n.id === nodeId)
+          if (node) node.data.definitionOfDone = dod
+        }),
+
       addChatMessage: (nodeId, msg) =>
         set((s) => {
           const node = s.nodes.find(n => n.id === nodeId)
@@ -399,30 +642,24 @@ export const useWorkstationStore = create<WorkstationState>()(
           const node = s.nodes.find(n => n.id === nodeId)
           if (node?.data.envVars) {
             const v = node.data.envVars.find(e => e.key === key)
-            if (v) {
-              v.value = value
-              v.isSet = value.trim().length > 0
-            }
+            if (v) { v.value = value; v.isSet = value.trim().length > 0 }
           }
         }),
 
-      // ─── Blueprint Generator ───────────────────────────────────────────────
+      // ─── Blueprint ─────────────────────────────────────────────────────────
 
       generateBlueprint: async (idea: string) => {
         const state = get()
         const apiKey = state.apiKey
-        if (!apiKey) {
-          state.showApiKeyModal()
-          return
-        }
+        if (!apiKey) { state.showApiKeyModal(); return }
 
         set((s) => { s.blueprintLoading = true; s.blueprintError = null })
 
-        const prompt = `You are a senior software architect. A developer has described their project idea. Break it into logical build sections.
+        const prompt = `You are a senior software architect. Break this project idea into logical build sections.
 
 Project idea: "${idea}"
 
-Return ONLY a JSON array of sections (no markdown, no explanation):
+Return ONLY a JSON array (no markdown, no explanation):
 [
   {
     "label": "Section Name",
@@ -434,10 +671,8 @@ Return ONLY a JSON array of sections (no markdown, no explanation):
 Rules:
 - 4-8 sections max
 - Start with foundational sections (setup, auth, DB) before features
-- "dependsOn" should list section labels this section requires first
-- Be specific and actionable
 - Always include a "Project Setup" section first
-- Always end with a "Deploy" section or the user will add a deploy node separately`
+- Be specific and actionable`
 
         try {
           const text = await callClaude(apiKey, 'claude-haiku-4-5', prompt, 1200)
@@ -458,18 +693,14 @@ Rules:
       applyBlueprint: (sections: BlueprintSection[]) => {
         const store = get()
         if (store.project) {
-          set((s) => {
-            if (s.project) s.project.blueprint = sections
-          })
+          set((s) => { if (s.project) s.project.blueprint = sections })
         }
-
-        // Place sections left to right, 520px apart, starting after overview
         sections.forEach((section, i) => {
           store.addSectionNode(section.label, { x: 600 + i * 520, y: 300 })
         })
       },
 
-      // ─── Context Injection ─────────────────────────────────────────────────
+      // ─── Context injection ────────────────────────────────────────────────
 
       buildProjectContext: (nodeId?: string): ProjectContext => {
         const state = get()
@@ -479,7 +710,6 @@ Rules:
         const sectionNodes = nodes.filter(n =>
           n.data.kind === 'section' || n.data.kind === 'overview'
         )
-
         const openTangents = nodes
           .filter(n => (n.data.kind === 'tangent' || n.data.kind === 'bug') && n.data.status !== 'done')
           .map(n => ({
@@ -517,8 +747,7 @@ Rules:
         const ctx = get().buildProjectContext(nodeId)
 
         const contextFile = `# Workstation Context File
-# Auto-generated — do not edit manually
-# Injected at the start of every Claude Code session for this section
+# Auto-generated — paste at the start of your Claude Code session
 
 ## Project
 - Name: ${ctx.projectName}
@@ -532,7 +761,7 @@ ${ctx.currentSectionPurpose ? `- Purpose: ${ctx.currentSectionPurpose}` : ''}
 ${ctx.handoffSummary ? `- Last session summary: ${ctx.handoffSummary}` : '- First session in this section'}
 
 ## All Sections
-${ctx.sections.map(s => `- [${s.status === 'done' ? '✓' : s.status === 'blocked' ? '⚠' : ' '}] ${s.label}${s.description ? ': ' + s.description : ''}`).join('\n')}
+${ctx.sections.map(s => `- [${s.status === 'done' ? 'x' : s.status === 'blocked' ? '!' : ' '}] ${s.label}${s.description ? ': ' + s.description : ''}`).join('\n')}
 
 ## Architecture Decisions
 ${ctx.adrs.length > 0
@@ -558,7 +787,7 @@ Write production-quality code. Be concise. Ask before making large structural ch
         return contextFile
       },
 
-      // ─── Handoff Doc ──────────────────────────────────────────────────────
+      // ─── Handoff doc ───────────────────────────────────────────────────────
 
       generateHandoffDoc: async (nodeId: string) => {
         const state = get()
@@ -566,29 +795,24 @@ Write production-quality code. Be concise. Ask before making large structural ch
         if (!node) return
 
         const apiKey = state.apiKey
-        if (!apiKey) {
-          state.showApiKeyModal()
-          return
-        }
+        if (!apiKey) { state.showApiKeyModal(); return }
 
         const history = node.data.chatHistory
         if (history.length === 0) return
 
-        const prompt = `You are a technical writer. Based on this chat history from a coding session for section "${node.data.label}", generate a concise handoff document.
+        const prompt = `You are a technical writer. Based on this coding session chat history for section "${node.data.label}", generate a concise handoff document.
 
 Chat history:
 ${history.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n')}
 
-Return a JSON object with these exact fields:
+Return a JSON object:
 {
   "whatWasBuilt": "...",
   "decisionsMAde": "...",
   "currentStatus": "...",
   "nextSteps": "...",
   "filesChanged": ["file1.ts", "file2.ts"]
-}
-
-Be concise and specific. Focus on what a developer needs to pick this back up cold.`
+}`
 
         try {
           const text = await callClaude(apiKey, 'claude-haiku-4-5', prompt, 600)
@@ -609,11 +833,8 @@ Be concise and specific. Focus on what a developer needs to pick this back up co
           }
 
           get().updateHandoffDoc(nodeId, doc)
-
-          // Refresh context file with new handoff summary
           setTimeout(() => get().generateContextFile(nodeId), 200)
 
-          // Spawn handoff node below if not already exists
           const alreadyHasHandoff = state.nodes.some(
             n => n.data.kind === 'handoff' && n.data.parentId === nodeId
           )
@@ -639,10 +860,116 @@ Be concise and specific. Focus on what a developer needs to pick this back up co
           console.error('Handoff doc generation failed:', err)
         }
       },
+
+      // ─── Final handoff export ─────────────────────────────────────────────
+
+      exportFinalHandoff: (): string => {
+        const state = get()
+        const project = state.project
+        const nodes = state.nodes
+
+        const sectionNodes = nodes.filter(n => n.data.kind === 'section')
+        const bugNodes     = nodes.filter(n => n.data.kind === 'bug')
+        const tangentNodes = nodes.filter(n => n.data.kind === 'tangent')
+        const deployNodes  = nodes.filter(n => n.data.kind === 'deploy')
+
+        const now = new Date().toLocaleDateString('en-US', {
+          year: 'numeric', month: 'long', day: 'numeric',
+        })
+
+        let md = `# ${project?.name ?? 'Project'} — Final Handoff Document\n`
+        md += `Generated: ${now}\n\n`
+        md += `---\n\n`
+
+        // Project overview
+        md += `## Project Overview\n`
+        md += `- **Stack:** ${project?.stack ?? 'Unknown'}\n`
+        md += `- **Deploy Target:** ${project?.deployTarget ?? 'Unknown'}\n`
+        md += `- **Description:** ${project?.description ?? ''}\n\n`
+
+        // Architecture decisions
+        if (project?.adrs && project.adrs.length > 0) {
+          md += `## Architecture Decisions\n`
+          project.adrs.forEach(adr => {
+            md += `### ${adr.title}\n`
+            md += `- **Decision:** ${adr.decision}\n`
+            md += `- **Reason:** ${adr.reason}\n\n`
+          })
+        }
+
+        // Sections
+        md += `## Sections\n\n`
+        sectionNodes.forEach(n => {
+          const status = n.data.status === 'done' ? '[x]' : n.data.status === 'blocked' ? '[!]' : '[ ]'
+          md += `### ${status} ${n.data.label}\n`
+
+          if (n.data.handoffDoc) {
+            const doc = n.data.handoffDoc
+            md += `**What was built:** ${doc.whatWasBuilt}\n\n`
+            md += `**Decisions made:** ${doc.decisionsMAde}\n\n`
+            md += `**Current status:** ${doc.currentStatus}\n\n`
+            if (doc.nextSteps) md += `**Next steps:** ${doc.nextSteps}\n\n`
+            if (doc.filesChanged?.length > 0) {
+              md += `**Files changed:**\n`
+              doc.filesChanged.forEach(f => { md += `- \`${f}\`\n` })
+              md += '\n'
+            }
+          } else {
+            md += `_No handoff doc generated for this section._\n\n`
+          }
+
+          // Tangents off this section
+          const myTangents = tangentNodes.filter(t => t.data.parentId === n.id)
+          if (myTangents.length > 0) {
+            md += `**Tangents:**\n`
+            myTangents.forEach(t => {
+              const resolved = t.data.resolvedTo ? 'Resolved' : 'Open'
+              md += `- ${t.data.label} — ${resolved}\n`
+            })
+            md += '\n'
+          }
+
+          md += `---\n\n`
+        })
+
+        // Bugs
+        if (bugNodes.length > 0) {
+          md += `## Bugs\n\n`
+          bugNodes.forEach(n => {
+            const fixed = n.data.status === 'done'
+            md += `### ${fixed ? '[Fixed]' : '[Open]'} ${n.data.label}\n`
+            if (n.data.bugDescription) md += `${n.data.bugDescription as string}\n\n`
+          })
+        }
+
+        // Deploy
+        if (deployNodes.length > 0) {
+          md += `## Deploy\n\n`
+          deployNodes.forEach(n => {
+            md += `- **Target:** ${n.data.deployTarget ?? 'Unknown'}\n`
+            md += `- **Status:** ${n.data.deployStatus ?? 'idle'}\n`
+            if (n.data.deployUrl) md += `- **URL:** ${n.data.deployUrl as string}\n`
+            md += '\n'
+          })
+        }
+
+        // Completion checklist
+        if (project?.completionChecklist && project.completionChecklist.length > 0) {
+          md += `## Completion Checklist\n\n`
+          project.completionChecklist.forEach(item => {
+            md += `- [${item.done ? 'x' : ' '}] ${item.label}\n`
+          })
+          md += '\n'
+        }
+
+        return md
+      },
     })),
     {
       name: 'workstation-store',
       partialize: (s) => ({
+        projects: s.projects,
+        activeProjectId: s.activeProjectId,
         project: s.project,
         nodes: s.nodes,
         edges: s.edges,
