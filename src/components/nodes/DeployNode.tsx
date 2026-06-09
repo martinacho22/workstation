@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Handle, Position } from '@xyflow/react'
-import { useWorkstationStore } from '@/store/useWorkstationStore'
+import { useWorkstationStore } from '@xyflow/react'
+import { useWorkstationStore as useStore } from '@/store/useWorkstationStore'
 import { WorkstationNodeData, DeployTarget } from '@/types'
 import NodeHeader from './NodeHeader'
 import ChatPane from '../panes/ChatPane'
@@ -45,7 +46,8 @@ interface Props {
 }
 
 export default function DeployNode({ data, id }: Props) {
-  const { updateEnvVar, addEnvVar, updateNodeStatus } = useWorkstationStore()
+  const { updateEnvVar, addEnvVar, updateNodeStatus } = useStore()
+  const project = useStore(s => s.project)
   const [tab, setTab] = useState<'checklist' | 'env' | 'commands' | 'chat'>('checklist')
   const [checked, setChecked] = useState<Record<string, boolean>>({})
   const [newKey, setNewKey] = useState('')
@@ -70,11 +72,18 @@ export default function DeployNode({ data, id }: Props) {
     navigator.clipboard.writeText(cmd)
   }
 
+  const deploySystemContext = [
+    `You are a deployment expert.`,
+    `Help deploy this project to ${target}.`,
+    project?.stack ? `Stack: ${project.stack}.` : '',
+    `Be concise and give exact commands.`,
+  ].filter(Boolean).join(' ')
+
   return (
     <div className={`${styles.node} ${data.status === 'done' ? styles.done : ''}`}>
       <Handle type="target" position={Position.Left} className={styles.handle} />
 
-      <NodeHeader id={id} data={data} icon="🚀" />
+      <NodeHeader id={id} data={data} />
 
       {data.deployUrl && (
         <a
@@ -83,7 +92,7 @@ export default function DeployNode({ data, id }: Props) {
           rel="noopener noreferrer"
           className={styles.liveUrl}
         >
-          🌐 {data.deployUrl}
+          {data.deployUrl}
         </a>
       )}
 
@@ -94,7 +103,7 @@ export default function DeployNode({ data, id }: Props) {
             className={`${styles.tab} ${tab === t ? styles.tabActive : ''}`}
             onClick={() => setTab(t)}
           >
-            {t === 'checklist' ? '✓ Preflight' : t === 'env' ? '🔑 Env Vars' : t === 'commands' ? '$ Commands' : '💬 Chat'}
+            {t === 'checklist' ? 'Preflight' : t === 'env' ? 'Env Vars' : t === 'commands' ? 'Commands' : 'Chat'}
           </button>
         ))}
       </div>
@@ -119,12 +128,12 @@ export default function DeployNode({ data, id }: Props) {
                   className={styles.deployBtn}
                   onClick={() => updateNodeStatus(id, 'done')}
                 >
-                  🚀 Ready to Deploy
+                  Ready to Deploy
                 </button>
               ) : (
                 <span className={styles.preflightHint}>
                   {!preflightDone ? `${PREFLIGHT_ITEMS.length - Object.values(checked).filter(Boolean).length} items remaining` : ''}
-                  {!allEnvSet ? ' • Some env vars missing' : ''}
+                  {!allEnvSet ? ' · Some env vars missing' : ''}
                 </span>
               )}
             </div>
@@ -172,7 +181,7 @@ export default function DeployNode({ data, id }: Props) {
         )}
 
         {tab === 'chat' && (
-          <ChatPane nodeId={id} data={data} systemContext={`You are a deployment expert. Help deploy this project to ${target}. Stack: ${useWorkstationStore.getState().project?.stack || 'unknown'}. Be concise and give exact commands.`} />
+          <ChatPane nodeId={id} data={data} systemContext={deploySystemContext} />
         )}
       </div>
 
