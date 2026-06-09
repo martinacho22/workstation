@@ -14,12 +14,18 @@ const STATUS_LABELS: Record<WorkstationNodeData['status'], string> = {
 interface Props {
   id: string
   data: WorkstationNodeData
-  expanded: boolean
-  onToggleExpand: () => void
+  expanded?: boolean
+  onToggleExpand?: () => void
+  icon?: string
+  accentOverride?: string
 }
 
-export default function NodeHeader({ id, data, expanded, onToggleExpand }: Props) {
-  const { minimizeNode, addTangentNode, updateNodeStatus, deleteNode, renameNode, resolveTangent, nodes, generateHandoffDoc } = useWorkstationStore()
+export default function NodeHeader({ id, data, expanded, onToggleExpand, icon, accentOverride }: Props) {
+  const {
+    minimizeNode, addTangentNode, updateNodeStatus, deleteNode,
+    renameNode, resolveTangent, nodes, generateHandoffDoc,
+  } = useWorkstationStore()
+
   const [renaming, setRenaming] = useState(false)
   const [renameVal, setRenameVal] = useState(data.label)
   const [showResolve, setShowResolve] = useState(false)
@@ -35,15 +41,22 @@ export default function NodeHeader({ id, data, expanded, onToggleExpand }: Props
     setRenaming(false)
   }
 
-  // Valid resolve targets: any section/overview that is NOT this node and NOT a child tangent of this node
   const resolveTargets = nodes.filter(
     n => n.id !== id && (n.data.kind === 'section' || n.data.kind === 'overview')
   )
 
+  const dotStyle = accentOverride
+    ? { background: accentOverride }
+    : undefined
+
   return (
     <div className={styles.header}>
       <div className={styles.left}>
-        <span className={`${styles.dot} ${styles[data.status]}`} />
+        {icon && <span className={styles.nodeIcon}>{icon}</span>}
+        <span
+          className={`${styles.dot} ${styles[data.status]}`}
+          style={dotStyle}
+        />
 
         {renaming ? (
           <input
@@ -73,12 +86,12 @@ export default function NodeHeader({ id, data, expanded, onToggleExpand }: Props
       <div className={styles.right}>
         <span className={styles.status}>{STATUS_LABELS[data.status]}</span>
 
-        {/* Resolve tangent — only show on tangent nodes that aren't done */}
-        {data.kind === 'tangent' && data.status !== 'done' && (
+        {/* Resolve tangent — only on tangent/bug nodes that aren't done */}
+        {(data.kind === 'tangent' || data.kind === 'bug') && data.status !== 'done' && (
           <div className={styles.resolveWrapper}>
             <button
               className={`${styles.btn} ${styles.resolveBtn}`}
-              title="Resolve tangent — tie it back"
+              title="Resolve — tie it back"
               onClick={(e) => { e.stopPropagation(); setShowResolve(v => !v) }}
             >
               ↩ Resolve
@@ -104,8 +117,8 @@ export default function NodeHeader({ id, data, expanded, onToggleExpand }: Props
           </div>
         )}
 
-        {/* Add tangent — not on overview */}
-        {data.kind !== 'overview' && data.kind !== 'handoff' && (
+        {/* Add tangent — not on overview, handoff, deploy, bug */}
+        {data.kind !== 'overview' && data.kind !== 'handoff' && data.kind !== 'deploy' && data.kind !== 'bug' && (
           <button
             className={styles.btn}
             title="New tangent from this node"
@@ -130,13 +143,15 @@ export default function NodeHeader({ id, data, expanded, onToggleExpand }: Props
           </button>
         )}
 
-        <button
-          className={styles.btn}
-          title={expanded ? 'Collapse' : 'Expand'}
-          onClick={(e) => { e.stopPropagation(); onToggleExpand() }}
-        >
-          {expanded ? '⊙' : '⊕'}
-        </button>
+        {onToggleExpand && (
+          <button
+            className={styles.btn}
+            title={expanded ? 'Collapse' : 'Expand'}
+            onClick={(e) => { e.stopPropagation(); onToggleExpand() }}
+          >
+            {expanded ? '⊙' : '⊕'}
+          </button>
+        )}
 
         <button
           className={styles.btn}
