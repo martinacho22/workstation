@@ -79,6 +79,14 @@
   border-left: 2px solid var(--accent);
 }
 
+/* streaming cursor */
+.cursor {
+  display: inline-block;
+  color: var(--accent);
+  animation: blink 0.7s infinite;
+  font-weight: 300;
+}
+
 .typing {
   color: var(--accent);
   font-size: 14px;
@@ -87,7 +95,7 @@
 
 @keyframes blink {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.2; }
+  50% { opacity: 0.15; }
 }
 
 .inputRow {
