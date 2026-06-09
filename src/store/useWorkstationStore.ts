@@ -25,40 +25,39 @@ import {
   CompletionChecklistItem,
 } from '@/types'
 import { nanoid } from 'nanoid'
+import { runClaude } from '@/lib/claudeRunner'
 
 interface WorkstationState {
-  // ─── Multi-project ──────────────────────────────────────────────────────
-  projects: Project[]                        // registry of all projects
-  activeProjectId: string | null             // which project is open on canvas
+  projects: Project[]
+  activeProjectId: string | null
   createProject: (p: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => string
   switchProject: (id: string) => void
   deleteProject: (id: string) => void
   getProjectMetas: () => ProjectMeta[]
 
-  // ─── Current project ────────────────────────────────────────────────────
   project: Project | null
   setProject: (p: Project) => void
 
-  // ─── ADRs ───────────────────────────────────────────────────────────────
   addAdr: (title: string, decision: string, reason: string) => void
   deleteAdr: (id: string) => void
 
-  // ─── Completion checklist ────────────────────────────────────────────────
   generateChecklist: () => Promise<void>
   toggleChecklistItem: (id: string) => void
   checklistLoading: boolean
 
-  // ─── API Key ────────────────────────────────────────────────────────────
+  // API key is now optional — only used as fallback if CLI unavailable
   apiKey: string
   setApiKey: (key: string) => void
 
-  // ─── Canvas ─────────────────────────────────────────────────────────────
+  // Claude CLI path (persisted)
+  claudeCliPath: string
+  setClaudeCliPath: (p: string) => void
+
   nodes: Node<WorkstationNodeData>[]
   edges: Edge[]
   onNodesChange: (changes: NodeChange[]) => void
   onEdgesChange: (changes: EdgeChange[]) => void
 
-  // ─── Node actions ────────────────────────────────────────────────────────
   addSectionNode: (label: string, position?: { x: number; y: number }) => string
   addTangentNode: (parentId: string, label: string) => string
   addBugNode: (parentId: string, description: string) => string
@@ -76,28 +75,22 @@ interface WorkstationState {
   updateEnvVar: (nodeId: string, key: string, value: string) => void
   setDefinitionOfDone: (nodeId: string, dod: string) => void
 
-  // ─── Blueprint ──────────────────────────────────────────────────────────
   generateBlueprint: (idea: string) => Promise<void>
   applyBlueprint: (sections: BlueprintSection[]) => void
   blueprintLoading: boolean
   blueprintError: string | null
 
-  // ─── Context injection ───────────────────────────────────────────────────
   buildProjectContext: (nodeId?: string) => ProjectContext
   generateContextFile: (nodeId: string) => Promise<string>
 
-  // ─── Final handoff export ────────────────────────────────────────────────
   exportFinalHandoff: () => string
 
-  // ─── Active node ────────────────────────────────────────────────────────
   activeNodeId: string | null
   setActiveNode: (id: string | null) => void
 
-  // ─── Roadmap overlay ────────────────────────────────────────────────────
   roadmapVisible: boolean
   toggleRoadmap: () => void
 
-  // ─── API key modal ───────────────────────────────────────────────────────
   apiKeyModalVisible: boolean
   showApiKeyModal: () => void
   hideApiKeyModal: () => void
@@ -145,30 +138,6 @@ function makeNode(
   }
 }
 
-async function callClaude(
-  apiKey: string,
-  model: string,
-  prompt: string,
-  maxTokens = 800
-): Promise<string> {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  })
-  const json = await res.json()
-  return json.content?.[0]?.text || ''
-}
-
 const INITIAL_NODES: Node<WorkstationNodeData>[] = [
   makeNode('overview', 'Overview', { x: 80, y: 300 }),
 ]
@@ -189,7 +158,6 @@ export const useWorkstationStore = create<WorkstationState>()(
           s.projects.push(newProject)
           s.activeProjectId = id
           s.project = newProject
-          // Reset canvas for new project
           s.nodes = [makeNode('overview', 'Overview', { x: 80, y: 300 })]
           s.edges = []
           s.activeNodeId = null
@@ -199,7 +167,6 @@ export const useWorkstationStore = create<WorkstationState>()(
 
       switchProject: (id) => {
         const state = get()
-        // Save current canvas state back into the current project
         if (state.activeProjectId) {
           set((s) => {
             const current = s.projects.find(p => p.id === s.activeProjectId)
@@ -210,7 +177,6 @@ export const useWorkstationStore = create<WorkstationState>()(
             }
           })
         }
-        // Load the target project
         set((s) => {
           const target = s.projects.find(p => p.id === id)
           if (target) {
@@ -238,7 +204,6 @@ export const useWorkstationStore = create<WorkstationState>()(
       getProjectMetas: () => {
         const { projects, nodes } = get()
         return projects.map((p) => {
-          // Use live nodes if this is the active project, otherwise use saved snapshot
           const projectNodes = p.id === get().activeProjectId
             ? nodes
             : (p.nodes as Node<WorkstationNodeData>[]) ?? []
@@ -280,27 +245,19 @@ export const useWorkstationStore = create<WorkstationState>()(
       project: null,
       setProject: (p) => set((s) => {
         s.project = p
-        // Upsert into projects array
         const idx = s.projects.findIndex(x => x.id === p.id)
         if (idx >= 0) s.projects[idx] = p
         else s.projects.push(p)
         s.activeProjectId = p.id
       }),
 
-      // ─── ADRs ──────────────────────────────────────────────────────────────
+      // ─── ADRs ─────────────────────────────────────────────────────────────
 
       addAdr: (title, decision, reason) => set((s) => {
         if (!s.project) return
         if (!s.project.adrs) s.project.adrs = []
-        s.project.adrs.push({
-          id: nanoid(6),
-          title,
-          decision,
-          reason,
-          createdAt: Date.now(),
-        })
+        s.project.adrs.push({ id: nanoid(6), title, decision, reason, createdAt: Date.now() })
         s.project.updatedAt = Date.now()
-        // Sync into projects array
         const idx = s.projects.findIndex(p => p.id === s.project?.id)
         if (idx >= 0) s.projects[idx] = s.project
       }),
@@ -318,8 +275,6 @@ export const useWorkstationStore = create<WorkstationState>()(
 
       generateChecklist: async () => {
         const state = get()
-        const apiKey = state.apiKey
-        if (!apiKey) { state.showApiKeyModal(); return }
         if (!state.project) return
 
         set((s) => { s.checklistLoading = true })
@@ -338,13 +293,17 @@ Return ONLY a JSON array:
 ]
 
 Rules:
-- 8–14 items total
+- 8-14 items total
 - Cover: code complete, tests, env vars set, deploy working, error handling, README updated, live URL verified
 - Be specific and actionable
 - No markdown, no explanation — just the JSON array`
 
         try {
-          const text = await callClaude(apiKey, 'claude-haiku-4-5', prompt, 800)
+          const text = await runClaude(prompt, {
+            apiKey: state.apiKey,
+            maxTokens: 800,
+          })
+
           const match = text.match(/\[[\s\S]*\]/)
           if (!match) throw new Error('No JSON array')
 
@@ -378,10 +337,20 @@ Rules:
         if (idx >= 0) s.projects[idx] = s.project!
       }),
 
-      // ─── API Key ───────────────────────────────────────────────────────────
+      // ─── API Key (optional fallback) ──────────────────────────────────────
 
       apiKey: '',
       setApiKey: (key) => set((s) => { s.apiKey = key }),
+
+      // ─── Claude CLI path ──────────────────────────────────────────────────
+
+      claudeCliPath: 'claude',
+      setClaudeCliPath: (p) => {
+        set((s) => { s.claudeCliPath = p || 'claude' })
+        // Notify main process
+        const electronAPI = (window as any).electron
+        if (electronAPI?.claude?.setPath) electronAPI.claude.setPath(p || 'claude')
+      },
 
       apiKeyModalVisible: false,
       showApiKeyModal: () => set((s) => { s.apiKeyModalVisible = true }),
@@ -389,7 +358,6 @@ Rules:
 
       blueprintLoading: false,
       blueprintError: null,
-      checklistLoading: false,
 
       nodes: INITIAL_NODES,
       edges: [],
@@ -439,25 +407,14 @@ Rules:
       addTangentNode: (parentId, label) => {
         const parent = get().nodes.find(n => n.id === parentId)
         if (!parent) return ''
-
-        const existingTangents = get().nodes.filter(
-          n => n.data.parentId === parentId && n.data.kind === 'tangent'
-        )
+        const existingTangents = get().nodes.filter(n => n.data.parentId === parentId && n.data.kind === 'tangent')
         const xOffset = existingTangents.length * 280
         const pos = { x: parent.position.x + xOffset, y: parent.position.y + 360 }
         const node = makeNode('tangent', label, pos, { parentId })
-
         set((s) => {
           s.nodes.push(node)
-          s.edges.push({
-            id: nanoid(6),
-            source: parentId,
-            target: node.id,
-            type: 'tangentEdge',
-            data: { kind: 'tangent-open' as EdgeKind },
-          })
+          s.edges.push({ id: nanoid(6), source: parentId, target: node.id, type: 'tangentEdge', data: { kind: 'tangent-open' as EdgeKind } })
         })
-
         setTimeout(() => get().generateContextFile(node.id), 300)
         return node.id
       },
@@ -465,29 +422,14 @@ Rules:
       addBugNode: (parentId, description) => {
         const parent = get().nodes.find(n => n.id === parentId)
         if (!parent) return ''
-
-        const existingBugs = get().nodes.filter(
-          n => n.data.parentId === parentId && n.data.kind === 'bug'
-        )
+        const existingBugs = get().nodes.filter(n => n.data.parentId === parentId && n.data.kind === 'bug')
         const xOffset = existingBugs.length * 280
         const pos = { x: parent.position.x + xOffset, y: parent.position.y + 360 }
-        const node = makeNode('bug', `Bug: ${description.slice(0, 30)}`, pos, {
-          parentId,
-          bugDescription: description,
-          bugAffectedSection: parent.data.label,
-        })
-
+        const node = makeNode('bug', `Bug: ${description.slice(0, 30)}`, pos, { parentId, bugDescription: description, bugAffectedSection: parent.data.label })
         set((s) => {
           s.nodes.push(node)
-          s.edges.push({
-            id: nanoid(6),
-            source: parentId,
-            target: node.id,
-            type: 'tangentEdge',
-            data: { kind: 'tangent-open' as EdgeKind },
-          })
+          s.edges.push({ id: nanoid(6), source: parentId, target: node.id, type: 'tangentEdge', data: { kind: 'tangent-open' as EdgeKind } })
         })
-
         return node.id
       },
 
@@ -495,42 +437,23 @@ Rules:
         const nodes = get().nodes
         const rightmost = nodes.reduce((max, n) => Math.max(max, n.position.x), 0)
         const pos = { x: rightmost + 560, y: 300 }
-
         const defaultEnvVars: EnvVar[] = [
-          { key: 'NODE_ENV',      value: 'production', isSet: true  },
-          { key: 'DATABASE_URL',  value: '',           isSet: false },
-          { key: 'API_SECRET',    value: '',           isSet: false },
+          { key: 'NODE_ENV',     value: 'production', isSet: true  },
+          { key: 'DATABASE_URL', value: '',           isSet: false },
+          { key: 'API_SECRET',   value: '',           isSet: false },
         ]
-
         const node = makeNode('deploy', `Deploy → ${target}`, pos, {
           deployTarget: target,
           deployStatus: 'idle',
           envVars: defaultEnvVars,
-          skills: DEFAULT_SKILLS.map(s => ({
-            ...s,
-            enabled: s.id === 'deployment' || s.id === 'memory',
-          })),
+          skills: DEFAULT_SKILLS.map(s => ({ ...s, enabled: s.id === 'deployment' || s.id === 'memory' })),
         })
-
-        const mainNodes = nodes.filter(n =>
-          (n.data.kind === 'section' || n.data.kind === 'overview') &&
-          n.data.status !== 'minimized'
-        )
+        const mainNodes = nodes.filter(n => (n.data.kind === 'section' || n.data.kind === 'overview') && n.data.status !== 'minimized')
         const lastMain = mainNodes[mainNodes.length - 1]
-
         set((s) => {
           s.nodes.push(node)
-          if (lastMain) {
-            s.edges.push({
-              id: nanoid(6),
-              source: lastMain.id,
-              target: node.id,
-              type: 'flowEdge',
-              data: { kind: 'flow' as EdgeKind },
-            })
-          }
+          if (lastMain) s.edges.push({ id: nanoid(6), source: lastMain.id, target: node.id, type: 'flowEdge', data: { kind: 'flow' as EdgeKind } })
         })
-
         return node.id
       },
 
@@ -541,118 +464,71 @@ Rules:
           const node = s.nodes.find(n => n.id === id)
           if (node) {
             node.data.status = status
-            if (status === 'blocked' && blockedReason) {
-              node.data.blockedReason = blockedReason
-            } else if (status !== 'blocked') {
-              delete node.data.blockedReason
-            }
+            if (status === 'blocked' && blockedReason) node.data.blockedReason = blockedReason
+            else if (status !== 'blocked') delete node.data.blockedReason
             node.data.updatedAt = Date.now()
           }
         }),
 
-      minimizeNode: (id) =>
-        set((s) => {
-          const node = s.nodes.find(n => n.id === id)
-          if (node) node.data.status = 'minimized'
-        }),
+      minimizeNode: (id) => set((s) => { const n = s.nodes.find(n => n.id === id); if (n) n.data.status = 'minimized' }),
+      restoreNode: (id) => set((s) => { const n = s.nodes.find(n => n.id === id); if (n) n.data.status = 'idle' }),
+      deleteNode: (id) => set((s) => {
+        s.nodes = s.nodes.filter(n => n.id !== id)
+        s.edges = s.edges.filter(e => e.source !== id && e.target !== id)
+        if (s.activeNodeId === id) s.activeNodeId = null
+      }),
+      renameNode: (id, label) => set((s) => {
+        const n = s.nodes.find(n => n.id === id)
+        if (n && label.trim()) { n.data.label = label.trim(); n.data.updatedAt = Date.now() }
+      }),
+      resolveTangent: (tangentId, targetId) => set((s) => {
+        const tangent = s.nodes.find(n => n.id === tangentId)
+        if (tangent) { tangent.data.resolvedTo = targetId; tangent.data.status = 'done' }
+        const openEdge = s.edges.find(e => e.target === tangentId)
+        if (openEdge) openEdge.data = { kind: 'tangent-resolved' as EdgeKind }
+        s.edges.push({ id: nanoid(6), source: tangentId, target: targetId, type: 'tiebackEdge', data: { kind: 'tieback' as EdgeKind } })
+      }),
 
-      restoreNode: (id) =>
-        set((s) => {
-          const node = s.nodes.find(n => n.id === id)
-          if (node) node.data.status = 'idle'
-        }),
+      setDefinitionOfDone: (nodeId, dod) => set((s) => {
+        const n = s.nodes.find(n => n.id === nodeId)
+        if (n) n.data.definitionOfDone = dod
+      }),
 
-      deleteNode: (id) =>
-        set((s) => {
-          s.nodes = s.nodes.filter(n => n.id !== id)
-          s.edges = s.edges.filter(e => e.source !== id && e.target !== id)
-          if (s.activeNodeId === id) s.activeNodeId = null
-        }),
+      addChatMessage: (nodeId, msg) => set((s) => {
+        const n = s.nodes.find(n => n.id === nodeId)
+        if (n) { n.data.chatHistory.push(msg); n.data.updatedAt = Date.now() }
+      }),
 
-      renameNode: (id, label) =>
-        set((s) => {
-          const node = s.nodes.find(n => n.id === id)
-          if (node && label.trim()) {
-            node.data.label = label.trim()
-            node.data.updatedAt = Date.now()
-          }
-        }),
+      updateHandoffDoc: (nodeId, doc) => set((s) => {
+        const n = s.nodes.find(n => n.id === nodeId)
+        if (!n) return
+        const existing = n.data.handoffDoc
+        if (existing) {
+          existing.versions.push({ timestamp: Date.now(), snapshot: { ...existing, versions: [] } })
+          Object.assign(existing, doc)
+        } else {
+          n.data.handoffDoc = { ...doc, versions: [] }
+        }
+        n.data.updatedAt = Date.now()
+      }),
 
-      resolveTangent: (tangentId, targetId) => {
-        set((s) => {
-          const tangent = s.nodes.find(n => n.id === tangentId)
-          if (tangent) {
-            tangent.data.resolvedTo = targetId
-            tangent.data.status = 'done'
-          }
+      addEnvVar: (nodeId, key) => set((s) => {
+        const n = s.nodes.find(n => n.id === nodeId)
+        if (n) { if (!n.data.envVars) n.data.envVars = []; n.data.envVars.push({ key, value: '', isSet: false }) }
+      }),
 
-          const openEdge = s.edges.find(e => e.target === tangentId)
-          if (openEdge) openEdge.data = { kind: 'tangent-resolved' as EdgeKind }
-
-          s.edges.push({
-            id: nanoid(6),
-            source: tangentId,
-            target: targetId,
-            type: 'tiebackEdge',
-            data: { kind: 'tieback' as EdgeKind },
-          })
-        })
-      },
-
-      setDefinitionOfDone: (nodeId, dod) =>
-        set((s) => {
-          const node = s.nodes.find(n => n.id === nodeId)
-          if (node) node.data.definitionOfDone = dod
-        }),
-
-      addChatMessage: (nodeId, msg) =>
-        set((s) => {
-          const node = s.nodes.find(n => n.id === nodeId)
-          if (node) {
-            node.data.chatHistory.push(msg)
-            node.data.updatedAt = Date.now()
-          }
-        }),
-
-      updateHandoffDoc: (nodeId, doc) =>
-        set((s) => {
-          const node = s.nodes.find(n => n.id === nodeId)
-          if (!node) return
-          const existing = node.data.handoffDoc
-          if (existing) {
-            existing.versions.push({ timestamp: Date.now(), snapshot: { ...existing, versions: [] } })
-            Object.assign(existing, doc)
-          } else {
-            node.data.handoffDoc = { ...doc, versions: [] }
-          }
-          node.data.updatedAt = Date.now()
-        }),
-
-      addEnvVar: (nodeId, key) =>
-        set((s) => {
-          const node = s.nodes.find(n => n.id === nodeId)
-          if (node) {
-            if (!node.data.envVars) node.data.envVars = []
-            node.data.envVars.push({ key, value: '', isSet: false })
-          }
-        }),
-
-      updateEnvVar: (nodeId, key, value) =>
-        set((s) => {
-          const node = s.nodes.find(n => n.id === nodeId)
-          if (node?.data.envVars) {
-            const v = node.data.envVars.find(e => e.key === key)
-            if (v) { v.value = value; v.isSet = value.trim().length > 0 }
-          }
-        }),
+      updateEnvVar: (nodeId, key, value) => set((s) => {
+        const n = s.nodes.find(n => n.id === nodeId)
+        if (n?.data.envVars) {
+          const v = n.data.envVars.find(e => e.key === key)
+          if (v) { v.value = value; v.isSet = value.trim().length > 0 }
+        }
+      }),
 
       // ─── Blueprint ─────────────────────────────────────────────────────────
 
       generateBlueprint: async (idea: string) => {
         const state = get()
-        const apiKey = state.apiKey
-        if (!apiKey) { state.showApiKeyModal(); return }
-
         set((s) => { s.blueprintLoading = true; s.blueprintError = null })
 
         const prompt = `You are a senior software architect. Break this project idea into logical build sections.
@@ -675,10 +551,9 @@ Rules:
 - Be specific and actionable`
 
         try {
-          const text = await callClaude(apiKey, 'claude-haiku-4-5', prompt, 1200)
+          const text = await runClaude(prompt, { apiKey: state.apiKey, maxTokens: 1200 })
           const match = text.match(/\[[\s\S]*\]/)
           if (!match) throw new Error('No JSON array found in response')
-
           const sections: BlueprintSection[] = JSON.parse(match[0])
           get().applyBlueprint(sections)
           set((s) => { s.blueprintLoading = false })
@@ -706,19 +581,14 @@ Rules:
         const state = get()
         const project = state.project
         const nodes = state.nodes
-
-        const sectionNodes = nodes.filter(n =>
-          n.data.kind === 'section' || n.data.kind === 'overview'
-        )
+        const sectionNodes = nodes.filter(n => n.data.kind === 'section' || n.data.kind === 'overview')
         const openTangents = nodes
           .filter(n => (n.data.kind === 'tangent' || n.data.kind === 'bug') && n.data.status !== 'done')
           .map(n => ({
             label: n.data.label,
             parentSection: nodes.find(p => p.id === n.data.parentId)?.data.label || 'unknown',
           }))
-
         const currentNode = nodeId ? nodes.find(n => n.id === nodeId) : undefined
-
         return {
           projectName: project?.name || 'Untitled Project',
           projectDescription: project?.description || '',
@@ -729,11 +599,7 @@ Rules:
             status: n.data.status,
             description: project?.blueprint?.find(b => b.label === n.data.label)?.description,
           })),
-          adrs: (project?.adrs || []).map(a => ({
-            title: a.title,
-            decision: a.decision,
-            reason: a.reason,
-          })),
+          adrs: (project?.adrs || []).map(a => ({ title: a.title, decision: a.decision, reason: a.reason })),
           currentSection: currentNode?.data.label,
           currentSectionPurpose: project?.blueprint?.find(b => b.label === currentNode?.data.label)?.description,
           openTangents,
@@ -745,7 +611,6 @@ Rules:
 
       generateContextFile: async (nodeId: string): Promise<string> => {
         const ctx = get().buildProjectContext(nodeId)
-
         const contextFile = `# Workstation Context File
 # Auto-generated — paste at the start of your Claude Code session
 
@@ -783,7 +648,6 @@ Write production-quality code. Be concise. Ask before making large structural ch
           const node = s.nodes.find(n => n.id === nodeId)
           if (node) node.data.contextFile = contextFile
         })
-
         return contextFile
       },
 
@@ -793,9 +657,6 @@ Write production-quality code. Be concise. Ask before making large structural ch
         const state = get()
         const node = state.nodes.find(n => n.id === nodeId)
         if (!node) return
-
-        const apiKey = state.apiKey
-        if (!apiKey) { state.showApiKeyModal(); return }
 
         const history = node.data.chatHistory
         if (history.length === 0) return
@@ -815,7 +676,7 @@ Return a JSON object:
 }`
 
         try {
-          const text = await callClaude(apiKey, 'claude-haiku-4-5', prompt, 600)
+          const text = await runClaude(prompt, { apiKey: state.apiKey, maxTokens: 600 })
           const match = text.match(/\{[\s\S]*\}/)
           if (!match) return
 
@@ -835,9 +696,7 @@ Return a JSON object:
           get().updateHandoffDoc(nodeId, doc)
           setTimeout(() => get().generateContextFile(nodeId), 200)
 
-          const alreadyHasHandoff = state.nodes.some(
-            n => n.data.kind === 'handoff' && n.data.parentId === nodeId
-          )
+          const alreadyHasHandoff = state.nodes.some(n => n.data.kind === 'handoff' && n.data.parentId === nodeId)
           if (!alreadyHasHandoff) {
             const parent = state.nodes.find(n => n.id === nodeId)!
             const handoffNode = makeNode('handoff', `${node.data.label} — Handoff`, {
@@ -847,13 +706,7 @@ Return a JSON object:
 
             set((s) => {
               s.nodes.push(handoffNode)
-              s.edges.push({
-                id: nanoid(6),
-                source: nodeId,
-                target: handoffNode.id,
-                type: 'tangentEdge',
-                data: { kind: 'tangent-resolved' as EdgeKind },
-              })
+              s.edges.push({ id: nanoid(6), source: nodeId, target: handoffNode.id, type: 'tangentEdge', data: { kind: 'tangent-resolved' as EdgeKind } })
             })
           }
         } catch (err) {
@@ -867,98 +720,61 @@ Return a JSON object:
         const state = get()
         const project = state.project
         const nodes = state.nodes
-
         const sectionNodes = nodes.filter(n => n.data.kind === 'section')
         const bugNodes     = nodes.filter(n => n.data.kind === 'bug')
         const tangentNodes = nodes.filter(n => n.data.kind === 'tangent')
         const deployNodes  = nodes.filter(n => n.data.kind === 'deploy')
+        const now = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 
-        const now = new Date().toLocaleDateString('en-US', {
-          year: 'numeric', month: 'long', day: 'numeric',
-        })
+        let md = `# ${project?.name ?? 'Project'} — Final Handoff Document\nGenerated: ${now}\n\n---\n\n`
+        md += `## Project Overview\n- **Stack:** ${project?.stack ?? 'Unknown'}\n- **Deploy Target:** ${project?.deployTarget ?? 'Unknown'}\n- **Description:** ${project?.description ?? ''}\n\n`
 
-        let md = `# ${project?.name ?? 'Project'} — Final Handoff Document\n`
-        md += `Generated: ${now}\n\n`
-        md += `---\n\n`
-
-        // Project overview
-        md += `## Project Overview\n`
-        md += `- **Stack:** ${project?.stack ?? 'Unknown'}\n`
-        md += `- **Deploy Target:** ${project?.deployTarget ?? 'Unknown'}\n`
-        md += `- **Description:** ${project?.description ?? ''}\n\n`
-
-        // Architecture decisions
         if (project?.adrs && project.adrs.length > 0) {
           md += `## Architecture Decisions\n`
-          project.adrs.forEach(adr => {
-            md += `### ${adr.title}\n`
-            md += `- **Decision:** ${adr.decision}\n`
-            md += `- **Reason:** ${adr.reason}\n\n`
-          })
+          project.adrs.forEach(adr => { md += `### ${adr.title}\n- **Decision:** ${adr.decision}\n- **Reason:** ${adr.reason}\n\n` })
         }
 
-        // Sections
         md += `## Sections\n\n`
         sectionNodes.forEach(n => {
           const status = n.data.status === 'done' ? '[x]' : n.data.status === 'blocked' ? '[!]' : '[ ]'
           md += `### ${status} ${n.data.label}\n`
-
           if (n.data.handoffDoc) {
             const doc = n.data.handoffDoc
-            md += `**What was built:** ${doc.whatWasBuilt}\n\n`
-            md += `**Decisions made:** ${doc.decisionsMAde}\n\n`
-            md += `**Current status:** ${doc.currentStatus}\n\n`
+            md += `**What was built:** ${doc.whatWasBuilt}\n\n**Decisions made:** ${doc.decisionsMAde}\n\n**Current status:** ${doc.currentStatus}\n\n`
             if (doc.nextSteps) md += `**Next steps:** ${doc.nextSteps}\n\n`
-            if (doc.filesChanged?.length > 0) {
-              md += `**Files changed:**\n`
-              doc.filesChanged.forEach(f => { md += `- \`${f}\`\n` })
-              md += '\n'
-            }
+            if (doc.filesChanged?.length > 0) { md += `**Files changed:**\n`; doc.filesChanged.forEach(f => { md += `- \`${f}\`\n` }); md += '\n' }
           } else {
             md += `_No handoff doc generated for this section._\n\n`
           }
-
-          // Tangents off this section
           const myTangents = tangentNodes.filter(t => t.data.parentId === n.id)
           if (myTangents.length > 0) {
             md += `**Tangents:**\n`
-            myTangents.forEach(t => {
-              const resolved = t.data.resolvedTo ? 'Resolved' : 'Open'
-              md += `- ${t.data.label} — ${resolved}\n`
-            })
+            myTangents.forEach(t => { md += `- ${t.data.label} — ${t.data.resolvedTo ? 'Resolved' : 'Open'}\n` })
             md += '\n'
           }
-
           md += `---\n\n`
         })
 
-        // Bugs
         if (bugNodes.length > 0) {
           md += `## Bugs\n\n`
           bugNodes.forEach(n => {
-            const fixed = n.data.status === 'done'
-            md += `### ${fixed ? '[Fixed]' : '[Open]'} ${n.data.label}\n`
+            md += `### ${n.data.status === 'done' ? '[Fixed]' : '[Open]'} ${n.data.label}\n`
             if (n.data.bugDescription) md += `${n.data.bugDescription as string}\n\n`
           })
         }
 
-        // Deploy
         if (deployNodes.length > 0) {
           md += `## Deploy\n\n`
           deployNodes.forEach(n => {
-            md += `- **Target:** ${n.data.deployTarget ?? 'Unknown'}\n`
-            md += `- **Status:** ${n.data.deployStatus ?? 'idle'}\n`
+            md += `- **Target:** ${n.data.deployTarget ?? 'Unknown'}\n- **Status:** ${n.data.deployStatus ?? 'idle'}\n`
             if (n.data.deployUrl) md += `- **URL:** ${n.data.deployUrl as string}\n`
             md += '\n'
           })
         }
 
-        // Completion checklist
         if (project?.completionChecklist && project.completionChecklist.length > 0) {
           md += `## Completion Checklist\n\n`
-          project.completionChecklist.forEach(item => {
-            md += `- [${item.done ? 'x' : ' '}] ${item.label}\n`
-          })
+          project.completionChecklist.forEach(item => { md += `- [${item.done ? 'x' : ' '}] ${item.label}\n` })
           md += '\n'
         }
 
@@ -974,6 +790,7 @@ Return a JSON object:
         nodes: s.nodes,
         edges: s.edges,
         apiKey: s.apiKey,
+        claudeCliPath: s.claudeCliPath,
       }),
     }
   )
