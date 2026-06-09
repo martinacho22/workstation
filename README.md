@@ -1,89 +1,80 @@
-# 🖥️ Workstation
+# Workstation
 
-> The operating system for solo builders — organized like a team, executed like a machine.
+> Infinite canvas for developers using Claude — organized, streamlined, terminal-first.
 
----
+## What it is
 
-## What It Is
+Workstation is a desktop app (Electron + React) that gives every Claude session a home. Instead of 8 scattered Claude windows you can't tell apart, Workstation puts your whole project on an infinite canvas — main flow left to right, tangents dropping down, tie-backs closing the loop.
 
-Workstation is an infinite canvas desktop app where every section of your project gets its own:
-- **Claude Code terminal** (CLI — uses your subscription, not API tokens)
-- **Reasoning chat** (Claude API — for planning, debugging logic, architecture)
-- **Handoff doc** (auto-generated each session so you never lose context)
+## The core idea
 
-Everything lives on one canvas. You see how it all connects.
+- **Main flow** — sections run left → right across the canvas (Auth → Payments → Dashboard)
+- **Tangents** — bug fix or feature detour? Spawn a tangent node below. Dashed line = open, solid = resolved
+- **Tie-backs** — when a tangent is done, draw a line back to what it affected. Canvas stays honest
+- **Terminal-first** — Claude Code runs in the terminal (subscription, not API). Reasoning chat uses API. 80% cost reduction
+- **Handoff docs** — every node has a living doc that updates each session. Never lose context again
+- **Minimized pills** — any node minimizes to a pill in the corner. Canvas stays clean
 
----
+## Run it
 
-## The Canvas
+```bash
+# Install
+npm install
 
-- **Infinite canvas** powered by `react-flow` — zoom out to see the whole project, zoom in to work
-- **Dependency arrows** — draw lines between sections to show what connects to what
-- **Overview Chat node** — always anchored top-center, the brain of the project
-- **Background fill progress** — canvas fills as sections complete
-- **Live activity pulse** — nodes glow when Claude Code is actively running
+# Dev mode (React + Electron)
+npm run dev
 
----
-
-## Token Routing (The Smart Part)
-
-| Task | Route | Cost |
-|---|---|---|
-| Writing / editing code | Claude Code CLI | ~$0 (subscription) |
-| Architecture reasoning | Claude API (Sonnet) | Small |
-| Debugging logic | Claude API (Sonnet) | Small |
-| Handoff doc generation | Claude API (Haiku) | Tiny |
-| Overview / planning | Claude API (Sonnet) | Medium |
-
-Code never touches the API. Only thinking does.
-
----
+# Build
+npm run build
+```
 
 ## Stack
 
-- **Electron** — desktop shell, spawns real terminal processes
-- **React** — UI
-- **react-flow** — infinite canvas, nodes, edges, zoom, pan
-- **node-pty** — spawns Claude Code CLI inside the app
-- **xterm.js** — renders terminals inside nodes
-- **Anthropic SDK** — reasoning chats
-- **SQLite (local)** — projects, sections, handoff docs, chat history
+| Layer | Tech |
+|---|---|
+| Shell | Electron |
+| UI | React + TypeScript + Vite |
+| Canvas | @xyflow/react (react-flow) |
+| Terminal | node-pty + xterm.js |
+| State | Zustand + immer + persist |
+| Storage | better-sqlite3 (local) |
+| Chat AI | Claude API (Anthropic SDK) |
+| Code AI | Claude Code CLI (subscription) |
 
----
+## API Key
 
-## MVP Scope
+Set your Anthropic key before launching:
 
-1. Infinite canvas with react-flow
-2. Overview Chat node (top center)
-3. Add section node → terminal (left) + reasoning chat (right)
-4. Draw dependency lines between sections
-5. Handoff doc node auto-generates when session ends
-6. Background fill progress
+```js
+// In browser devtools console (dev mode):
+window.__ANTHROPIC_KEY__ = 'sk-ant-...'
+```
 
----
+Production: key is stored in Electron secure store (never hardcoded).
 
-## Project Structure
+## Design
+
+Dark canvas (`#0a0a0f`), green accent (`#00ff88`), dot grid, single active glow. Inspired by Supabase's premium dark UI.
+
+## Project structure
 
 ```
 workstation/
-├── electron/          # Main process, terminal spawning, IPC
+├── electron/
+│   ├── main.js          # Electron shell + PTY process manager
+│   └── preload.js       # IPC bridge → window.electron
 ├── src/
-│   ├── canvas/        # react-flow canvas, node types, edges
-│   ├── nodes/         # OverviewChat, Section, HandoffDoc node components
-│   ├── chat/          # Claude API reasoning chat
-│   ├── terminal/      # xterm.js terminal component
-│   ├── handoff/       # Handoff doc generation
-│   ├── store/         # SQLite local storage
-│   └── app.tsx        # Root
-├── docs/
-│   └── design.md      # Full design spec
-└── package.json
+│   ├── App.tsx           # Root — ReactFlow canvas
+│   ├── components/
+│   │   ├── canvas/       # Toolbar, ProjectSetup, RoadmapOverlay, MinimizedPills, ProgressBackground
+│   │   ├── nodes/        # SectionNode, OverviewNode, HandoffNode, NodeHeader
+│   │   ├── panes/        # TerminalPane (xterm), ChatPane (Claude API)
+│   │   └── edges/        # FlowEdge, TangentEdge, TiebackEdge
+│   ├── store/            # useWorkstationStore (Zustand)
+│   ├── types/            # TypeScript types
+│   └── styles/           # globals.css (design tokens)
+└── docs/
+    ├── design.md
+    ├── design-spec.md
+    └── mvp-scope.md
 ```
-
----
-
-## Status
-
-🟡 **Scaffolding** — foundation being laid.
-
-Built by Zane + Tank.
