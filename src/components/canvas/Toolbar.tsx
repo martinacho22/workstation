@@ -14,7 +14,7 @@ const DEPLOY_TARGETS: { label: string; value: DeployTarget }[] = [
 export default function Toolbar() {
   const {
     project, addSectionNode, activeNodeId, addTangentNode,
-    toggleRoadmap, roadmapVisible, showApiKeyModal, apiKey, addDeployNode,
+    toggleRoadmap, roadmapVisible, addDeployNode,
   } = useWorkstationStore()
 
   const [newName, setNewName] = useState('')
@@ -75,7 +75,6 @@ export default function Toolbar() {
 
         {/* Actions */}
         <div className={styles.actions}>
-
           <button
             className={`${styles.btn} ${styles.blueprintBtn}`}
             onClick={() => setShowBlueprint(true)}
@@ -94,7 +93,7 @@ export default function Toolbar() {
               onClick={handleTangentClick}
               title="Add tangent — click a node first"
             >
-              ↓ Tangent
+              Tangent
             </button>
             {showTangentHint && (
               <div className={styles.tangentHint}>
@@ -134,14 +133,6 @@ export default function Toolbar() {
             title="Toggle roadmap overlay"
           >
             Roadmap
-          </button>
-
-          <button
-            className={`${styles.btn} ${!apiKey ? styles.btnWarn : ''}`}
-            onClick={showApiKeyModal}
-            title={apiKey ? 'API key set' : 'Set API key'}
-          >
-            {apiKey ? 'Key ✓' : 'Set Key'}
           </button>
         </div>
 
