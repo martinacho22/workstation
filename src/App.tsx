@@ -13,11 +13,11 @@ import {
 import '@xyflow/react/dist/style.css'
 
 import { useWorkstationStore } from '@/store/useWorkstationStore'
-import SectionNode  from '@/components/nodes/SectionNode'
-import OverviewNode from '@/components/nodes/OverviewNode'
-import HandoffNode  from '@/components/nodes/HandoffNode'
-import DeployNode   from '@/components/nodes/DeployNode'
-import BugNode      from '@/components/nodes/BugNode'
+import SectionNode       from '@/components/nodes/SectionNode'
+import OverviewNode      from '@/components/nodes/OverviewNode'
+import HandoffNode       from '@/components/nodes/HandoffNode'
+import DeployNode        from '@/components/nodes/DeployNode'
+import BugNode           from '@/components/nodes/BugNode'
 import MinimizedPills    from '@/components/canvas/MinimizedPills'
 import Toolbar           from '@/components/canvas/Toolbar'
 import RoadmapOverlay    from '@/components/canvas/RoadmapOverlay'
@@ -59,7 +59,6 @@ export default function App() {
   const [screen, setScreen]       = useState<Screen>('dashboard')
   const [showSetup, setShowSetup] = useState(false)
 
-  // Collapse sidebar when on canvas
   const sidebarCollapsed = screen === 'canvas'
 
   const onConnect = useCallback(() => {}, [])
@@ -73,6 +72,7 @@ export default function App() {
   }, [setActiveNode])
 
   function handleOpenCanvas(_projectId: string) {
+    setShowSetup(false)
     setScreen('canvas')
   }
 
@@ -90,8 +90,18 @@ export default function App() {
     setScreen('canvas')
   }
 
+  function handleWarRoom() {
+    setScreen('warroom')
+  }
+
   return (
-    <div style={{ display: 'flex', width: '100vw', height: '100vh', overflow: 'hidden', background: 'var(--bg)' }}>
+    <div style={{
+      display: 'flex',
+      width: '100vw',
+      height: '100vh',
+      overflow: 'hidden',
+      background: 'var(--bg)',
+    }}>
       <Sidebar
         current={screen}
         onChange={setScreen}
@@ -100,7 +110,11 @@ export default function App() {
 
       {/* Dashboard */}
       {screen === 'dashboard' && (
-        <Dashboard onOpenCanvas={handleOpenCanvas} onNewProject={handleNewProject} />
+        <Dashboard
+          onOpenCanvas={handleOpenCanvas}
+          onNewProject={handleNewProject}
+          onWarRoom={handleWarRoom}
+        />
       )}
 
       {/* Canvas */}
@@ -112,6 +126,7 @@ export default function App() {
             <>
               <ProgressBackground />
 
+              {/* API key warning — no emoji */}
               {!apiKey && (
                 <div
                   onClick={showApiKeyModal}
@@ -121,8 +136,8 @@ export default function App() {
                     left: 56,
                     right: 0,
                     zIndex: 50,
-                    background: 'rgba(240,165,0,0.12)',
-                    borderBottom: '1px solid rgba(240,165,0,0.3)',
+                    background: 'rgba(240,165,0,0.1)',
+                    borderBottom: '1px solid rgba(240,165,0,0.25)',
                     color: '#f0c040',
                     fontSize: '12px',
                     textAlign: 'center',
@@ -131,8 +146,8 @@ export default function App() {
                     letterSpacing: '0.03em',
                   }}
                 >
-                  ⚠️ No API key set — reasoning chat and handoff docs won't work.{' '}
-                  <span style={{ textDecoration: 'underline' }}>Click to add your key →</span>
+                  No API key set — reasoning chat and handoff docs won't work.{' '}
+                  <span style={{ textDecoration: 'underline' }}>Click to add your key</span>
                 </div>
               )}
 
@@ -173,11 +188,11 @@ export default function App() {
                     borderRadius: 'var(--radius)',
                   }}
                   nodeColor={(n) => {
-                    if (n.data?.kind === 'deploy')   return 'rgba(0,200,255,0.6)'
-                    if (n.data?.kind === 'bug')      return 'rgba(255,96,96,0.6)'
-                    if (n.data?.status === 'done')   return 'var(--done)'
+                    if (n.data?.kind === 'deploy')    return 'rgba(0,200,255,0.6)'
+                    if (n.data?.kind === 'bug')       return 'rgba(255,96,96,0.6)'
+                    if (n.data?.status === 'done')    return 'var(--done)'
                     if (n.data?.status === 'blocked') return 'rgba(255,200,60,0.6)'
-                    if (n.data?.kind === 'overview') return 'var(--accent)'
+                    if (n.data?.kind === 'overview')  return 'var(--accent)'
                     return 'var(--surface2)'
                   }}
                   maskColor="rgba(10,10,15,0.7)"
