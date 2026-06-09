@@ -5,9 +5,9 @@ import BlueprintModal from './BlueprintModal'
 import styles from './Toolbar.module.css'
 
 const DEPLOY_TARGETS: { label: string; value: DeployTarget }[] = [
-  { label: 'Vercel', value: 'vercel' },
+  { label: 'Vercel',  value: 'vercel'  },
   { label: 'Railway', value: 'railway' },
-  { label: 'Fly.io', value: 'fly' },
+  { label: 'Fly.io',  value: 'fly'     },
   { label: 'Netlify', value: 'netlify' },
 ]
 
@@ -76,13 +76,12 @@ export default function Toolbar() {
         {/* Actions */}
         <div className={styles.actions}>
 
-          {/* Blueprint Generator */}
           <button
             className={`${styles.btn} ${styles.blueprintBtn}`}
             onClick={() => setShowBlueprint(true)}
             title="Generate blueprint from idea"
           >
-            🧬 Blueprint
+            Blueprint
           </button>
 
           <button className={styles.btn} onClick={openAddSection} title="Add section">
@@ -104,7 +103,6 @@ export default function Toolbar() {
             )}
           </div>
 
-          {/* Deploy node */}
           {!hasDeployNode && (
             <div className={styles.deployWrapper}>
               <button
@@ -112,7 +110,7 @@ export default function Toolbar() {
                 onClick={() => setShowDeployMenu(v => !v)}
                 title="Add deploy node"
               >
-                🚀 Deploy
+                Deploy
               </button>
               {showDeployMenu && (
                 <div className={styles.deployMenu}>
@@ -135,15 +133,15 @@ export default function Toolbar() {
             onClick={toggleRoadmap}
             title="Toggle roadmap overlay"
           >
-            ⊞ Roadmap
+            Roadmap
           </button>
 
           <button
             className={`${styles.btn} ${!apiKey ? styles.btnWarn : ''}`}
             onClick={showApiKeyModal}
-            title={apiKey ? 'API key set ✓' : 'Set API key'}
+            title={apiKey ? 'API key set' : 'Set API key'}
           >
-            {apiKey ? '🔑 ✓' : '🔑 Set Key'}
+            {apiKey ? 'Key ✓' : 'Set Key'}
           </button>
         </div>
 
