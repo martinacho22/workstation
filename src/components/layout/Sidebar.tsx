@@ -7,15 +7,16 @@ interface Props {
   collapsed: boolean
 }
 
+// Clean geometric symbols — no emojis
 const NAV: { id: Screen; icon: string; label: string }[] = [
-  { id: 'dashboard', icon: '⬡',  label: 'Dashboard' },
-  { id: 'canvas',    icon: '🖥️',  label: 'Canvas'    },
-  { id: 'warroom',   icon: '📊',  label: 'War Room'  },
-  { id: 'projects',  icon: '📁',  label: 'Projects'  },
+  { id: 'dashboard', icon: '▦',  label: 'Dashboard' },
+  { id: 'canvas',    icon: '◻',  label: 'Canvas'    },
+  { id: 'warroom',   icon: '◈',  label: 'War Room'  },
+  { id: 'projects',  icon: '▤',  label: 'Projects'  },
 ]
 
 const BOTTOM: { id: Screen; icon: string; label: string }[] = [
-  { id: 'settings', icon: '⚙️', label: 'Settings' },
+  { id: 'settings', icon: '⊙', label: 'Settings' },
 ]
 
 export default function Sidebar({ current, onChange, collapsed }: Props) {
@@ -23,7 +24,10 @@ export default function Sidebar({ current, onChange, collapsed }: Props) {
     <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''}`}>
       {/* Logo */}
       <div className={styles.logo}>
-        {collapsed ? '⬡' : <><span className={styles.logoIcon}>⬡</span><span className={styles.logoText}>Workstation</span></>}
+        {collapsed
+          ? <span className={styles.logoIcon}>W</span>
+          : <><span className={styles.logoIcon}>W</span><span className={styles.logoText}>Workstation</span></>
+        }
       </div>
 
       <nav className={styles.nav}>
