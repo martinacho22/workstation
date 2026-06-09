@@ -1,0 +1,152 @@
+.node {
+  background: var(--surface);
+  border: 1px solid rgba(255, 96, 96, 0.35);
+  border-radius: 16px;
+  width: 380px;
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 0 20px rgba(255, 96, 96, 0.06);
+  overflow: hidden;
+}
+
+.node.fixed {
+  border-color: var(--done);
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.08);
+  opacity: 0.75;
+}
+
+.handle {
+  background: rgba(255, 96, 96, 0.5) !important;
+  border: 2px solid rgba(255, 96, 96, 0.8) !important;
+  width: 10px !important;
+  height: 10px !important;
+}
+
+.affectedTag {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 4px 14px 8px;
+}
+.affectedTag span {
+  color: rgba(255, 160, 96, 0.9);
+  font-weight: 500;
+}
+
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  padding: 0 14px;
+}
+
+.tab {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 7px 10px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+}
+.tab:hover { color: var(--text); }
+.tabActive {
+  color: rgba(255, 96, 96, 0.9);
+  border-bottom-color: rgba(255, 96, 96, 0.9);
+}
+
+.tabContent {
+  flex: 1;
+  padding: 14px;
+  overflow-y: auto;
+}
+
+.details { display: flex; flex-direction: column; gap: 12px; }
+
+.field { display: flex; flex-direction: column; gap: 6px; }
+
+.label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.description {
+  font-size: 13px;
+  color: var(--text);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.stepsInput {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+  padding: 10px;
+  resize: vertical;
+  line-height: 1.5;
+}
+.stepsInput:focus { outline: none; border-color: rgba(255,96,96,0.5); }
+.stepsInput::placeholder { color: var(--text-muted); }
+
+.actions { display: flex; gap: 8px; margin-top: 4px; }
+
+.markFixed {
+  background: rgba(0, 255, 136, 0.1);
+  border: 1px solid rgba(0, 255, 136, 0.3);
+  color: var(--accent);
+  padding: 7px 16px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.markFixed:hover { background: rgba(0, 255, 136, 0.18); }
+
+.fixedBadge {
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 600;
+  padding: 7px 0;
+}
+
+.resolvePanel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--bg);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.resolveSelect {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 7px 10px;
+}
+.resolveSelect:focus { outline: none; border-color: var(--accent); }
+
+.resolveBtn {
+  background: var(--accent);
+  border: none;
+  color: #000;
+  padding: 7px 14px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  align-self: flex-start;
+}
+.resolveBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+.resolveBtn:hover:not(:disabled) { opacity: 0.85; }
