@@ -1,0 +1,214 @@
+.node {
+  background: var(--surface);
+  border: 1px solid rgba(0, 200, 255, 0.3);
+  border-radius: 16px;
+  width: 460px;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 0 24px rgba(0, 200, 255, 0.06);
+  overflow: hidden;
+}
+
+.node.done {
+  border-color: var(--done);
+  box-shadow: 0 0 24px rgba(0, 255, 136, 0.1);
+}
+
+.handle {
+  background: rgba(0, 200, 255, 0.5) !important;
+  border: 2px solid rgba(0, 200, 255, 0.8) !important;
+  width: 10px !important;
+  height: 10px !important;
+}
+
+.liveUrl {
+  display: block;
+  margin: 0 14px 8px;
+  padding: 6px 12px;
+  background: rgba(0, 255, 136, 0.08);
+  border: 1px solid rgba(0, 255, 136, 0.2);
+  border-radius: 6px;
+  color: var(--accent);
+  font-size: 11px;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.liveUrl:hover { background: rgba(0, 255, 136, 0.14); }
+
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  padding: 0 14px;
+  gap: 2px;
+}
+
+.tab {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 8px 10px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.tab:hover { color: var(--text); }
+.tabActive {
+  color: rgba(0, 200, 255, 0.9);
+  border-bottom-color: rgba(0, 200, 255, 0.9);
+}
+
+.tabContent {
+  flex: 1;
+  padding: 14px;
+  overflow-y: auto;
+}
+
+/* Checklist */
+.checklist { display: flex; flex-direction: column; gap: 8px; }
+
+.checkItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.checkbox { accent-color: var(--accent); cursor: pointer; }
+.checkedText { text-decoration: line-through; color: var(--text-muted); }
+
+.preflightStatus { margin-top: 12px; }
+
+.deployBtn {
+  background: var(--accent);
+  border: none;
+  color: #000;
+  padding: 9px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  width: 100%;
+  transition: opacity 0.15s;
+}
+.deployBtn:hover { opacity: 0.85; }
+
+.preflightHint {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Env Vars */
+.envPanel { display: flex; flex-direction: column; gap: 6px; }
+
+.envRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.envDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.envDotSet { background: var(--accent); }
+.envDotMissing { background: #ff6060; }
+
+.envKey {
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-muted);
+  width: 140px;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.envValue {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  padding: 5px 8px;
+}
+.envValue:focus { outline: none; border-color: var(--accent); }
+
+.addEnv {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.newKeyInput {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--accent);
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  padding: 6px 10px;
+}
+.newKeyInput:focus { outline: none; border-color: var(--accent); }
+
+.addBtn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 6px;
+  font-size: 11px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.addBtn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Commands */
+.commands { display: flex; flex-direction: column; gap: 8px; }
+
+.commandsHint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 8px;
+}
+.commandsHint strong { color: rgba(0, 200, 255, 0.9); }
+
+.commandRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+}
+
+.command {
+  flex: 1;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.copyBtn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+.copyBtn:hover { background: var(--surface2); color: var(--text); }
