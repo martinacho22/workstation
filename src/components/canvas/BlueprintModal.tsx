@@ -8,10 +8,9 @@ interface Props {
 
 export default function BlueprintModal({ onClose }: Props) {
   const [idea, setIdea] = useState('')
-  const { generateBlueprint, blueprintLoading, blueprintError, apiKey, showApiKeyModal } = useWorkstationStore()
+  const { generateBlueprint, blueprintLoading, blueprintError } = useWorkstationStore()
 
   async function handleGenerate() {
-    if (!apiKey) { showApiKeyModal(); return }
     if (!idea.trim()) return
     await generateBlueprint(idea)
     if (!blueprintError) onClose()
@@ -21,7 +20,6 @@ export default function BlueprintModal({ onClose }: Props) {
     <div className={styles.overlay}>
       <div className={styles.modal}>
         <div className={styles.header}>
-          <span className={styles.icon}>🧬</span>
           <h2>Blueprint Generator</h2>
           <button className={styles.close} onClick={onClose}>✕</button>
         </div>
@@ -40,7 +38,7 @@ export default function BlueprintModal({ onClose }: Props) {
         />
 
         {blueprintError && (
-          <div className={styles.error}>⚠ {blueprintError}</div>
+          <div className={styles.error}>{blueprintError}</div>
         )}
 
         <div className={styles.footer}>
@@ -50,11 +48,7 @@ export default function BlueprintModal({ onClose }: Props) {
             onClick={handleGenerate}
             disabled={blueprintLoading || !idea.trim()}
           >
-            {blueprintLoading ? (
-              <span className={styles.spinner}>⟳ Generating...</span>
-            ) : (
-              '⚡ Generate Blueprint'
-            )}
+            {blueprintLoading ? 'Generating...' : 'Generate Blueprint'}
           </button>
         </div>
       </div>
