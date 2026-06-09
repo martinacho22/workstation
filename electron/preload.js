@@ -42,11 +42,14 @@ contextBridge.exposeInMainWorld('electron', {
       return () => ipcRenderer.removeAllListeners(channel)
     },
 
-    // CLI health check
+    // CLI health check — returns { installed, authenticated, version, path, error }
     status: () => ipcRenderer.invoke('claude:status'),
 
     // Update the path to the claude binary
     setPath: (p) => ipcRenderer.invoke('claude:set-path', { path: p }),
+
+    // Attempt to fix common auth issues (clear cache, logout)
+    fixAuth: () => ipcRenderer.invoke('claude:fix-auth'),
   },
 
   // ─── System dialogs ──────────────────────────────────────────────────────
