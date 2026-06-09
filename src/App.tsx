@@ -13,18 +13,25 @@ import {
 import '@xyflow/react/dist/style.css'
 
 import { useWorkstationStore } from '@/store/useWorkstationStore'
-import SectionNode from '@/components/nodes/SectionNode'
+import SectionNode  from '@/components/nodes/SectionNode'
 import OverviewNode from '@/components/nodes/OverviewNode'
-import HandoffNode from '@/components/nodes/HandoffNode'
-import DeployNode from '@/components/nodes/DeployNode'
-import BugNode from '@/components/nodes/BugNode'
-import MinimizedPills from '@/components/canvas/MinimizedPills'
-import Toolbar from '@/components/canvas/Toolbar'
-import RoadmapOverlay from '@/components/canvas/RoadmapOverlay'
-import ProjectSetup from '@/components/canvas/ProjectSetup'
+import HandoffNode  from '@/components/nodes/HandoffNode'
+import DeployNode   from '@/components/nodes/DeployNode'
+import BugNode      from '@/components/nodes/BugNode'
+import MinimizedPills    from '@/components/canvas/MinimizedPills'
+import Toolbar           from '@/components/canvas/Toolbar'
+import RoadmapOverlay    from '@/components/canvas/RoadmapOverlay'
+import ProjectSetup      from '@/components/canvas/ProjectSetup'
 import ProgressBackground from '@/components/canvas/ProgressBackground'
-import ApiKeyModal from '@/components/canvas/ApiKeyModal'
+import ApiKeyModal       from '@/components/canvas/ApiKeyModal'
 import { FlowEdge, TangentEdge, TiebackEdge } from '@/components/edges'
+
+import Sidebar    from '@/components/layout/Sidebar'
+import Dashboard  from '@/screens/Dashboard'
+import WarRoom    from '@/screens/WarRoom'
+import Projects   from '@/screens/Projects'
+import Settings   from '@/screens/Settings'
+import { Screen } from '@/types/screens'
 
 const nodeTypes: NodeTypes = {
   sectionNode:  SectionNode,
@@ -49,7 +56,11 @@ export default function App() {
     setActiveNode,
   } = useWorkstationStore()
 
-  const [showSetup, setShowSetup] = useState(!project)
+  const [screen, setScreen]       = useState<Screen>('dashboard')
+  const [showSetup, setShowSetup] = useState(false)
+
+  // Collapse sidebar when on canvas
+  const sidebarCollapsed = screen === 'canvas'
 
   const onConnect = useCallback(() => {}, [])
 
@@ -61,95 +72,139 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [setActiveNode])
 
-  if (showSetup) {
-    return <ProjectSetup onDone={() => setShowSetup(false)} />
+  function handleOpenCanvas(_projectId: string) {
+    setScreen('canvas')
+  }
+
+  function handleNewProject() {
+    setShowSetup(true)
+    setScreen('canvas')
+  }
+
+  function handleLoadTemplate(_templateId: string) {
+    setShowSetup(true)
+    setScreen('canvas')
+  }
+
+  function handleImport(_path: string) {
+    setScreen('canvas')
   }
 
   return (
-    <div style={{ width: '100vw', height: '100vh', background: 'var(--bg)', position: 'relative' }}>
-      <ProgressBackground />
+    <div style={{ display: 'flex', width: '100vw', height: '100vh', overflow: 'hidden', background: 'var(--bg)' }}>
+      <Sidebar
+        current={screen}
+        onChange={setScreen}
+        collapsed={sidebarCollapsed}
+      />
 
-      {!apiKey && (
-        <div
-          onClick={showApiKeyModal}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            zIndex: 50,
-            background: 'rgba(240,165,0,0.12)',
-            borderBottom: '1px solid rgba(240,165,0,0.3)',
-            color: '#f0c040',
-            fontSize: '12px',
-            textAlign: 'center',
-            padding: '6px',
-            cursor: 'pointer',
-            letterSpacing: '0.03em',
-          }}
-        >
-          ⚠️ No API key set — reasoning chat and handoff docs won't work.{' '}
-          <span style={{ textDecoration: 'underline' }}>Click to add your key →</span>
+      {/* Dashboard */}
+      {screen === 'dashboard' && (
+        <Dashboard onOpenCanvas={handleOpenCanvas} onNewProject={handleNewProject} />
+      )}
+
+      {/* Canvas */}
+      {screen === 'canvas' && (
+        <div style={{ flex: 1, height: '100vh', position: 'relative' }}>
+          {showSetup && !project ? (
+            <ProjectSetup onDone={() => setShowSetup(false)} />
+          ) : (
+            <>
+              <ProgressBackground />
+
+              {!apiKey && (
+                <div
+                  onClick={showApiKeyModal}
+                  style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 56,
+                    right: 0,
+                    zIndex: 50,
+                    background: 'rgba(240,165,0,0.12)',
+                    borderBottom: '1px solid rgba(240,165,0,0.3)',
+                    color: '#f0c040',
+                    fontSize: '12px',
+                    textAlign: 'center',
+                    padding: '6px',
+                    cursor: 'pointer',
+                    letterSpacing: '0.03em',
+                  }}
+                >
+                  ⚠️ No API key set — reasoning chat and handoff docs won't work.{' '}
+                  <span style={{ textDecoration: 'underline' }}>Click to add your key →</span>
+                </div>
+              )}
+
+              <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onConnect={onConnect}
+                nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
+                connectionMode={ConnectionMode.Loose}
+                fitView
+                fitViewOptions={{ padding: 0.3 }}
+                minZoom={0.15}
+                maxZoom={2}
+                proOptions={{ hideAttribution: true }}
+                style={{ background: 'transparent', marginTop: apiKey ? 0 : 32 }}
+                onPaneClick={() => setActiveNode(null)}
+              >
+                <Background
+                  variant={BackgroundVariant.Dots}
+                  gap={28}
+                  size={1}
+                  color="rgba(255,255,255,0.04)"
+                />
+                <Controls
+                  style={{
+                    background: 'var(--surface)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius)',
+                  }}
+                />
+                <MiniMap
+                  style={{
+                    background: 'var(--surface)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius)',
+                  }}
+                  nodeColor={(n) => {
+                    if (n.data?.kind === 'deploy')   return 'rgba(0,200,255,0.6)'
+                    if (n.data?.kind === 'bug')      return 'rgba(255,96,96,0.6)'
+                    if (n.data?.status === 'done')   return 'var(--done)'
+                    if (n.data?.status === 'blocked') return 'rgba(255,200,60,0.6)'
+                    if (n.data?.kind === 'overview') return 'var(--accent)'
+                    return 'var(--surface2)'
+                  }}
+                  maskColor="rgba(10,10,15,0.7)"
+                />
+                <Panel position="top-center">
+                  <Toolbar />
+                </Panel>
+              </ReactFlow>
+
+              <MinimizedPills />
+              {roadmapVisible && <RoadmapOverlay />}
+              <ApiKeyModal />
+            </>
+          )}
         </div>
       )}
 
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        connectionMode={ConnectionMode.Loose}
-        fitView
-        fitViewOptions={{ padding: 0.3 }}
-        minZoom={0.15}
-        maxZoom={2}
-        proOptions={{ hideAttribution: true }}
-        style={{ background: 'transparent', marginTop: apiKey ? 0 : 32 }}
-        onPaneClick={() => setActiveNode(null)}
-      >
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={28}
-          size={1}
-          color="rgba(255,255,255,0.04)"
-        />
+      {/* War Room */}
+      {screen === 'warroom' && <WarRoom />}
 
-        <Controls
-          style={{
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)',
-          }}
-        />
+      {/* Projects */}
+      {screen === 'projects' && (
+        <Projects onLoadTemplate={handleLoadTemplate} onImport={handleImport} />
+      )}
 
-        <MiniMap
-          style={{
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)',
-          }}
-          nodeColor={(n) => {
-            if (n.data?.kind === 'deploy') return 'rgba(0,200,255,0.6)'
-            if (n.data?.kind === 'bug') return 'rgba(255,96,96,0.6)'
-            if (n.data?.status === 'done') return 'var(--done)'
-            if (n.data?.status === 'blocked') return 'rgba(255,200,60,0.6)'
-            if (n.data?.kind === 'overview') return 'var(--accent)'
-            return 'var(--surface2)'
-          }}
-          maskColor="rgba(10,10,15,0.7)"
-        />
-
-        <Panel position="top-center">
-          <Toolbar />
-        </Panel>
-      </ReactFlow>
-
-      <MinimizedPills />
-      {roadmapVisible && <RoadmapOverlay />}
-      <ApiKeyModal />
+      {/* Settings */}
+      {screen === 'settings' && <Settings />}
     </div>
   )
 }
