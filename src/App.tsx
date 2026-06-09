@@ -23,7 +23,6 @@ import Toolbar            from '@/components/canvas/Toolbar'
 import RoadmapOverlay     from '@/components/canvas/RoadmapOverlay'
 import ProjectSetup       from '@/components/canvas/ProjectSetup'
 import ProgressBackground from '@/components/canvas/ProgressBackground'
-import ApiKeyModal        from '@/components/canvas/ApiKeyModal'
 import { FlowEdge, TangentEdge, TiebackEdge } from '@/components/edges'
 
 import Sidebar    from '@/components/layout/Sidebar'
@@ -55,22 +54,18 @@ export default function App() {
     nodes, edges,
     onNodesChange, onEdgesChange,
     project, roadmapVisible,
-    apiKey, showApiKeyModal,
     setActiveNode,
   } = useWorkstationStore()
 
-  const [screen, setScreen]         = useState<Screen>('dashboard')
-  const [showSetup, setShowSetup]   = useState(false)
+  const [screen, setScreen]             = useState<Screen>('dashboard')
+  const [showSetup, setShowSetup]       = useState(false)
   const [showCLISetup, setShowCLISetup] = useState(false)
 
   const sidebarCollapsed = screen === 'canvas'
 
-  // On mount: check if setup has been completed before
   useEffect(() => {
     const done = localStorage.getItem(SETUP_DONE_KEY)
-    if (!done) {
-      setShowCLISetup(true)
-    }
+    if (!done) setShowCLISetup(true)
   }, [])
 
   const onConnect = useCallback(() => {}, [])
@@ -111,7 +106,6 @@ export default function App() {
     setScreen('warroom')
   }
 
-  // Show CLI setup wizard on first launch (full screen, before anything else)
   if (showCLISetup) {
     return <Setup onComplete={handleSetupComplete} />
   }
@@ -130,7 +124,6 @@ export default function App() {
         collapsed={sidebarCollapsed}
       />
 
-      {/* Dashboard */}
       {screen === 'dashboard' && (
         <Dashboard
           onOpenCanvas={handleOpenCanvas}
@@ -139,7 +132,6 @@ export default function App() {
         />
       )}
 
-      {/* Canvas */}
       {screen === 'canvas' && (
         <div style={{ flex: 1, height: '100vh', position: 'relative' }}>
           {showSetup && !project ? (
@@ -201,21 +193,17 @@ export default function App() {
 
               <MinimizedPills />
               {roadmapVisible && <RoadmapOverlay />}
-              <ApiKeyModal />
             </>
           )}
         </div>
       )}
 
-      {/* War Room */}
       {screen === 'warroom' && <WarRoom />}
 
-      {/* Projects */}
       {screen === 'projects' && (
         <Projects onLoadTemplate={handleLoadTemplate} onImport={handleImport} />
       )}
 
-      {/* Settings */}
       {screen === 'settings' && <Settings />}
     </div>
   )
