@@ -13,6 +13,7 @@ interface Props {
 
 export default function BugNode({ data, id }: Props) {
   const { nodes, resolveTangent, updateNodeStatus } = useWorkstationStore()
+  const project = useWorkstationStore(s => s.project)
   const [tab, setTab] = useState<'details' | 'chat'>('details')
   const [resolveTarget, setResolveTarget] = useState('')
   const [showResolve, setShowResolve] = useState(false)
@@ -27,18 +28,20 @@ export default function BugNode({ data, id }: Props) {
     setShowResolve(false)
   }
 
-  const systemContext = `You are a debugging expert. Help fix this bug:
-Bug: ${data.bugDescription || data.label}
-Affected section: ${data.bugAffectedSection || 'unknown'}
-Steps to reproduce: ${steps || 'not provided'}
-Project stack: ${useWorkstationStore.getState().project?.stack || 'unknown'}
-Be direct. Identify root cause first, then provide the fix.`
+  const systemContext = [
+    `You are a debugging expert. Help fix this bug.`,
+    `Bug: ${data.bugDescription || data.label}`,
+    `Affected section: ${data.bugAffectedSection || 'unknown'}`,
+    steps ? `Steps to reproduce: ${steps}` : '',
+    project?.stack ? `Project stack: ${project.stack}` : '',
+    `Be direct. Identify root cause first, then provide the fix.`,
+  ].filter(Boolean).join('\n')
 
   return (
     <div className={`${styles.node} ${isFixed ? styles.fixed : ''}`}>
       <Handle type="target" position={Position.Top} className={styles.handle} />
 
-      <NodeHeader id={id} data={data} icon="🐛" accentOverride="#ff6060" />
+      <NodeHeader id={id} data={data} accentOverride="#ff6060" />
 
       <div className={styles.affectedTag}>
         Affects: <span>{data.bugAffectedSection || 'unknown section'}</span>
@@ -55,7 +58,7 @@ Be direct. Identify root cause first, then provide the fix.`
           className={`${styles.tab} ${tab === 'chat' ? styles.tabActive : ''}`}
           onClick={() => setTab('chat')}
         >
-          💬 Debug Chat
+          Debug Chat
         </button>
       </div>
 
@@ -80,19 +83,17 @@ Be direct. Identify root cause first, then provide the fix.`
 
             <div className={styles.actions}>
               {!isFixed ? (
-                <>
-                  <button
-                    className={styles.markFixed}
-                    onClick={() => {
-                      updateNodeStatus(id, 'done')
-                      setShowResolve(true)
-                    }}
-                  >
-                    ✓ Mark Fixed
-                  </button>
-                </>
+                <button
+                  className={styles.markFixed}
+                  onClick={() => {
+                    updateNodeStatus(id, 'done')
+                    setShowResolve(true)
+                  }}
+                >
+                  Mark Fixed
+                </button>
               ) : (
-                <span className={styles.fixedBadge}>✓ Fixed</span>
+                <span className={styles.fixedBadge}>Fixed</span>
               )}
             </div>
 
@@ -114,7 +115,7 @@ Be direct. Identify root cause first, then provide the fix.`
                   onClick={handleResolve}
                   disabled={!resolveTarget}
                 >
-                  ↩ Tie Back
+                  Tie Back
                 </button>
               </div>
             )}
