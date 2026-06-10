@@ -17,7 +17,7 @@
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(255,255,255,0.25);
+  color: rgba(255,255,255,0.22);
   padding: 10px 14px 6px;
   flex-shrink: 0;
 }
@@ -40,7 +40,7 @@
 }
 .roadmapEmptyText, .tasksEmptyText {
   font-size: 11px;
-  color: rgba(255,255,255,0.18);
+  color: rgba(255,255,255,0.15);
   text-align: center;
   line-height: 1.5;
 }
@@ -82,7 +82,7 @@
 .statDone    { color: #4ade80; }
 .statActive  { color: var(--accent, #00ff88); }
 .statBlocked { color: #f0c040; }
-.statTotal   { color: rgba(255,255,255,0.3); margin-left: auto; }
+.statTotal   { color: rgba(255,255,255,0.28); margin-left: auto; }
 
 .phases {
   flex: 1;
@@ -92,18 +92,26 @@
   gap: 1px;
   padding: 0 8px;
 }
+.phases::-webkit-scrollbar { width: 3px; }
+.phases::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.07); border-radius: 2px; }
 
 .phase {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px;
+  padding: 5px 8px;
   border-radius: 6px;
   cursor: pointer;
   transition: background 0.12s;
   min-width: 0;
 }
 .phase:hover { background: rgba(255,255,255,0.05); }
+
+/* Currently open phase */
+.phaseCurrent {
+  background: rgba(0,255,136,0.06) !important;
+  border: 1px solid rgba(0,255,136,0.12);
+}
 
 .phaseLeft {
   display: flex;
@@ -113,7 +121,7 @@
 }
 .phaseIndex {
   font-size: 9px;
-  color: rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.18);
   width: 12px;
   text-align: right;
 }
@@ -126,7 +134,7 @@
 .phaseDot[data-status="done"]    { background: #4ade80; }
 .phaseDot[data-status="active"]  { background: var(--accent, #00ff88); }
 .phaseDot[data-status="blocked"] { background: #f0c040; }
-.phaseDot[data-status="idle"]    { background: rgba(255,255,255,0.2); }
+.phaseDot[data-status="idle"]    { background: rgba(255,255,255,0.18); }
 
 .phaseBody {
   flex: 1;
@@ -138,25 +146,24 @@
 .phaseLabel {
   font-size: 11px;
   font-weight: 500;
-  color: rgba(255,255,255,0.8);
+  color: rgba(255,255,255,0.78);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .phaseDesc {
   font-size: 9px;
-  color: rgba(255,255,255,0.25);
+  color: rgba(255,255,255,0.22);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
 .phaseStatus {
   font-size: 8px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.18);
   flex-shrink: 0;
 }
 .phase_done    .phaseStatus { color: #4ade80; }
@@ -172,10 +179,19 @@
   min-height: 0;
 }
 
-/* ── Tasks zone (left 35% of bottom) ──────────────────────────────────────── */
+/* ── Tasks zone (left 35% of bottom when chat is present) ─────────────────── */
 .tasksZone {
   flex: 0 0 35%;
   border-right: 1px solid rgba(255,255,255,0.06);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* ── Tasks zone (full width when chat is hidden) ──────────────────────────── */
+.tasksZoneFull {
+  flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -190,8 +206,8 @@
   flex-direction: column;
   gap: 8px;
 }
-
-.taskGroup {}
+.tasks::-webkit-scrollbar { width: 3px; }
+.tasks::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.07); border-radius: 2px; }
 
 .taskGroupLabel {
   font-size: 9px;
@@ -213,25 +229,16 @@
 }
 .taskItem:hover { background: rgba(255,255,255,0.05); }
 
-.taskDot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
+.taskDot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
 .taskLabel {
   flex: 1;
   font-size: 10px;
-  color: rgba(255,255,255,0.6);
+  color: rgba(255,255,255,0.58);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.taskMsgCount {
-  font-size: 9px;
-  color: rgba(255,255,255,0.2);
-  flex-shrink: 0;
-}
+.taskMsgCount { font-size: 9px; color: rgba(255,255,255,0.18); flex-shrink: 0; }
 
 /* ── Chat zone (right 65% of bottom) ──────────────────────────────────────── */
 .chatZone {
@@ -257,23 +264,19 @@
   flex-direction: column;
   gap: 8px;
 }
+.chatMessages::-webkit-scrollbar { width: 3px; }
+.chatMessages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 2px; }
 
-.chatMsg {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-}
-.chatMsg_user {
-  flex-direction: row-reverse;
-}
+.chatMsg { display: flex; align-items: flex-start; gap: 6px; }
+.chatMsg_user { flex-direction: row-reverse; }
 
 .chatAvatar {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: rgba(0,255,136,0.15);
+  background: rgba(0,255,136,0.12);
   color: var(--accent, #00ff88);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -287,38 +290,31 @@
   padding: 7px 10px;
   border-radius: 10px;
   font-size: 11px;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 .chatMsg_assistant .chatBubble {
   background: rgba(255,255,255,0.05);
-  color: rgba(255,255,255,0.75);
+  color: rgba(255,255,255,0.72);
   border-bottom-left-radius: 3px;
 }
 .chatMsg_user .chatBubble {
-  background: rgba(0,255,136,0.1);
-  color: rgba(255,255,255,0.85);
+  background: rgba(0,255,136,0.09);
+  color: rgba(255,255,255,0.82);
   border-bottom-right-radius: 3px;
 }
 
 /* Typing indicator */
-.typingDots {
-  display: flex;
-  gap: 3px;
-  align-items: center;
-  height: 14px;
-}
+.typingDots { display: flex; gap: 3px; align-items: center; height: 14px; }
 .typingDots span {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
+  width: 4px; height: 4px; border-radius: 50%;
   background: rgba(255,255,255,0.3);
   animation: typingBounce 1.2s infinite;
 }
 .typingDots span:nth-child(2) { animation-delay: 0.2s; }
 .typingDots span:nth-child(3) { animation-delay: 0.4s; }
 @keyframes typingBounce {
-  0%, 60%, 100% { transform: translateY(0); opacity: 0.3; }
-  30% { transform: translateY(-4px); opacity: 0.9; }
+  0%, 60%, 100% { transform: translateY(0);  opacity: 0.3; }
+  30%           { transform: translateY(-4px); opacity: 0.9; }
 }
 
 /* Input row */
@@ -331,35 +327,29 @@
 }
 .chatInput {
   flex: 1;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
   border-radius: 8px;
-  color: rgba(255,255,255,0.85);
+  color: rgba(255,255,255,0.82);
   font-size: 11px;
   padding: 7px 10px;
   resize: none;
   outline: none;
   font-family: inherit;
   line-height: 1.4;
-  min-height: 32px;
+  min-height: 30px;
   max-height: 80px;
 }
-.chatInput:focus {
-  border-color: rgba(0,255,136,0.3);
-}
-.chatInput::placeholder {
-  color: rgba(255,255,255,0.2);
-}
-.chatInput:disabled {
-  opacity: 0.5;
-}
+.chatInput:focus { border-color: rgba(0,255,136,0.28); }
+.chatInput::placeholder { color: rgba(255,255,255,0.18); }
+.chatInput:disabled { opacity: 0.45; }
 
 .chatSend {
   width: 30px;
   height: 30px;
   border-radius: 8px;
-  background: rgba(0,255,136,0.12);
-  border: 1px solid rgba(0,255,136,0.2);
+  background: rgba(0,255,136,0.1);
+  border: 1px solid rgba(0,255,136,0.18);
   color: var(--accent, #00ff88);
   font-size: 14px;
   cursor: pointer;
@@ -370,5 +360,5 @@
   transition: background 0.12s;
   flex-shrink: 0;
 }
-.chatSend:hover:not(:disabled) { background: rgba(0,255,136,0.2); }
-.chatSend:disabled { opacity: 0.3; cursor: default; }
+.chatSend:hover:not(:disabled) { background: rgba(0,255,136,0.18); }
+.chatSend:disabled { opacity: 0.28; cursor: default; }
