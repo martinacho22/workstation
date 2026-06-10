@@ -75,7 +75,7 @@ export default function App() {
     setScreen(s)
   }
 
-  // ── CLI setup wizard (first launch) ──────────────────────────────────────
+  // ── First launch wizard ───────────────────────────────────────────────────
   if (showCLISetup) {
     return (
       <>
@@ -149,54 +149,81 @@ export default function App() {
                     opacity:       sessionOpen ? 0 : 1,
                     pointerEvents: sessionOpen ? 'none' : 'auto',
                     transition:    'opacity 0.15s',
+                    display:       'flex',
+                    flexDirection: 'column',
                   }}>
-                    <ReactFlow
-                      nodes={nodes}
-                      edges={edges}
-                      onNodesChange={onNodesChange}
-                      onEdgesChange={onEdgesChange}
-                      onConnect={onConnect}
-                      nodeTypes={nodeTypes}
-                      edgeTypes={edgeTypes}
-                      connectionMode={ConnectionMode.Loose}
-                      fitView
-                      fitViewOptions={{ padding: 0.4 }}
-                      minZoom={0.2}
-                      maxZoom={2}
-                      proOptions={{ hideAttribution: true }}
-                      style={{ background: 'transparent' }}
-                      onPaneClick={() => setActiveNode(null)}
-                    >
-                      <Background
-                        variant={BackgroundVariant.Dots}
-                        gap={28}
-                        size={1}
-                        color="rgba(255,255,255,0.04)"
-                      />
-                      <Controls style={{
-                        background: 'var(--surface, rgba(255,255,255,0.05))',
-                        border:     '1px solid var(--border, rgba(255,255,255,0.08))',
-                        borderRadius: 8,
-                      }} />
-                      <MiniMap
-                        style={{
-                          background:   'var(--surface, rgba(255,255,255,0.03))',
-                          border:       '1px solid var(--border, rgba(255,255,255,0.06))',
+                    {/* Toolbar fixed above the canvas, not floating inside it */}
+                    <div style={{
+                      flexShrink: 0,
+                      borderBottom: '1px solid rgba(255,255,255,0.06)',
+                      background: 'rgba(10,10,18,0.9)',
+                      backdropFilter: 'blur(8px)',
+                    }}>
+                      <Toolbar onNewProject={() => setShowSetup(true)} />
+                    </div>
+
+                    <div style={{ flex: 1, position: 'relative' }}>
+                      <ReactFlow
+                        nodes={nodes}
+                        edges={edges}
+                        onNodesChange={onNodesChange}
+                        onEdgesChange={onEdgesChange}
+                        onConnect={onConnect}
+                        nodeTypes={nodeTypes}
+                        edgeTypes={edgeTypes}
+                        connectionMode={ConnectionMode.Loose}
+                        fitView
+                        fitViewOptions={{ padding: 0.4 }}
+                        minZoom={0.2}
+                        maxZoom={2}
+                        proOptions={{ hideAttribution: true }}
+                        style={{ background: 'transparent' }}
+                        onPaneClick={() => setActiveNode(null)}
+                      >
+                        <Background
+                          variant={BackgroundVariant.Dots}
+                          gap={28}
+                          size={1}
+                          color="rgba(255,255,255,0.04)"
+                        />
+                        <Controls style={{
+                          background:   'var(--surface, rgba(255,255,255,0.05))',
+                          border:       '1px solid var(--border, rgba(255,255,255,0.08))',
                           borderRadius: 8,
-                        }}
-                        nodeColor={(n) => {
-                          if (n.data?.status === 'done')     return 'rgba(74,222,128,0.6)'
-                          if (n.data?.status === 'blocked')  return 'rgba(240,192,64,0.6)'
-                          if (n.data?.status === 'active')   return 'rgba(0,255,136,0.6)'
-                          if (n.data?.kind   === 'overview') return 'var(--accent, #00ff88)'
-                          return 'rgba(255,255,255,0.08)'
-                        }}
-                        maskColor="rgba(10,10,15,0.7)"
-                      />
-                      <Panel position="top-center" style={{ marginTop: 8 }}>
-                        <Toolbar onNewProject={() => setShowSetup(true)} />
-                      </Panel>
-                    </ReactFlow>
+                        }} />
+                        <MiniMap
+                          style={{
+                            background:   'var(--surface, rgba(255,255,255,0.03))',
+                            border:       '1px solid var(--border, rgba(255,255,255,0.06))',
+                            borderRadius: 8,
+                          }}
+                          nodeColor={(n) => {
+                            if (n.data?.status === 'done')     return 'rgba(74,222,128,0.6)'
+                            if (n.data?.status === 'blocked')  return 'rgba(240,192,64,0.6)'
+                            if (n.data?.status === 'active')   return 'rgba(0,255,136,0.6)'
+                            if (n.data?.kind   === 'overview') return 'var(--accent, #00ff88)'
+                            return 'rgba(255,255,255,0.08)'
+                          }}
+                          maskColor="rgba(10,10,15,0.7)"
+                        />
+
+                        {/* Empty canvas prompt */}
+                        {!project && (
+                          <Panel position="top-center" style={{ marginTop: 60 }}>
+                            <div style={{
+                              textAlign: 'center',
+                              color: 'rgba(255,255,255,0.2)',
+                              fontSize: 13,
+                              lineHeight: 1.6,
+                            }}>
+                              <div style={{ fontSize: 28, marginBottom: 8, opacity: 0.3 }}>⬡</div>
+                              <div style={{ fontWeight: 600, marginBottom: 4 }}>No project open</div>
+                              <div style={{ fontSize: 12 }}>Describe your idea in the Orchestrator → or click New Project</div>
+                            </div>
+                          </Panel>
+                        )}
+                      </ReactFlow>
+                    </div>
                   </div>
 
                   {/* Session view overlay */}
@@ -211,8 +238,10 @@ export default function App() {
           )}
         </div>
 
-        {/* ── RIGHT: orchestrator panel (canvas only) ── */}
-        {screen === 'canvas' && <OrchestratorPanel />}
+        {/* ── RIGHT: orchestrator panel — always visible ── */}
+        {/* On non-canvas screens: roadmap + tasks only (chat hidden) */}
+        {/* On canvas: full panel */}
+        <OrchestratorPanel />
 
       </div>
     </>
