@@ -9,14 +9,23 @@ interface Props {
 }
 
 const NAV_ITEMS: { id: Screen; icon: string; label: string }[] = [
-  { id: 'canvas',    icon: 'CVS', label: 'Canvas'    },
-  { id: 'dashboard', icon: 'PRJ', label: 'Projects'  },
-  { id: 'warroom',   icon: 'WAR', label: 'War Room'  },
-  { id: 'settings',  icon: 'SET', label: 'Settings'  },
+  { id: 'canvas',    icon: '⬡', label: 'Canvas'    },
+  { id: 'dashboard', icon: '⊞', label: 'Projects'  },
+  { id: 'warroom',   icon: '⊛', label: 'War Room'  },
+  { id: 'settings',  icon: '⚙', label: 'Settings'  },
 ]
 
 export default function Sidebar({ screen, onChange }: Props) {
   const project = useWorkstationStore(s => s.project)
+
+  function openProjectDir() {
+    const dir = project?.projectDir ?? project?.repoPath
+    if (!dir) return
+    const electronAPI = (window as any).electron
+    electronAPI?.fs?.openInFinder?.(dir)
+  }
+
+  const projectDir = project?.projectDir ?? project?.repoPath
 
   return (
     <div className={styles.sidebar}>
@@ -26,23 +35,22 @@ export default function Sidebar({ screen, onChange }: Props) {
         <span className={styles.logoText}>Workstation</span>
       </div>
 
-      {/* Project name chip */}
+      {/* Active project chip */}
       {project && (
-        <div style={{
-          margin: '8px 12px 0',
-          padding: '6px 10px',
-          borderRadius: 6,
-          background: 'rgba(0,255,136,0.06)',
-          border: '1px solid rgba(0,255,136,0.12)',
-          fontSize: 11,
-          color: 'var(--accent, #00ff88)',
-          fontWeight: 600,
-          letterSpacing: '0.03em',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}>
-          {project.name}
+        <div className={styles.projectChip}>
+          <span className={styles.projectName}>{project.name}</span>
+          {projectDir && (
+            <button
+              className={styles.projectDirBtn}
+              onClick={openProjectDir}
+              title={`Open in Finder: ${projectDir}`}
+            >
+              <span className={styles.projectDirText} title={projectDir}>
+                {projectDir.replace(/^.*\/([^/]+)$/, '$1')}
+              </span>
+              <span className={styles.projectDirIcon}>↗</span>
+            </button>
+          )}
         </div>
       )}
 
@@ -60,11 +68,9 @@ export default function Sidebar({ screen, onChange }: Props) {
         ))}
       </nav>
 
-      {/* Bottom — version */}
+      {/* Bottom */}
       <div className={styles.bottom}>
-        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.04em' }}>
-          WORKSTATION v0.1
-        </span>
+        <span className={styles.version}>v0.1</span>
       </div>
     </div>
   )
