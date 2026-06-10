@@ -206,6 +206,8 @@
 .tasks::-webkit-scrollbar { width: 3px; }
 .tasks::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.07); border-radius: 2px; }
 
+.taskGroup { display: flex; flex-direction: column; gap: 1px; }
+
 .taskGroupLabel {
   font-size: 9px;
   font-weight: 700;
@@ -224,6 +226,14 @@
   min-width: 0;
 }
 .taskItem:hover { background: rgba(255,255,255,0.05); }
+
+/* Currently active/selected node */
+.taskItemActive {
+  background: rgba(0,255,136,0.06) !important;
+  border: 1px solid rgba(0,255,136,0.12);
+}
+.taskItemActive .taskLabel { color: rgba(255,255,255,0.88); }
+
 .taskDot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
 .taskLabel {
   flex: 1;
@@ -243,6 +253,46 @@
   overflow: hidden;
   min-width: 0;
 }
+
+/* ── Architect identity header ──────────────────────────────────────────────
+   Makes it immediately clear this is the "Architect" Claude — the
+   project-level planner. Distinct from FloatingChatCard (worker, blue).
+*/
+.chatIdentityBar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px 6px;
+  border-bottom: 1px solid rgba(0,255,136,0.07);
+  background: rgba(0,255,136,0.03);
+  flex-shrink: 0;
+}
+.chatIdentityAvatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(0,255,136,0.12);
+  color: var(--accent, #00ff88);
+  font-size: 11px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.chatIdentityLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent, #00ff88);
+  opacity: 0.75;
+  letter-spacing: 0.02em;
+}
+.chatIdentitySub {
+  font-size: 9px;
+  color: rgba(255,255,255,0.22);
+  margin-left: auto;
+}
+
 .chat {
   flex: 1;
   display: flex;
@@ -264,7 +314,7 @@
 .chatMsg { display: flex; align-items: flex-start; gap: 6px; }
 .chatMsg_user { flex-direction: row-reverse; }
 
-/* System messages (blueprint generated, phase done, etc.) */
+/* System messages */
 .chatMsg_system .chatBubble {
   background: rgba(0,255,136,0.06) !important;
   border: 1px solid rgba(0,255,136,0.10);
@@ -277,13 +327,14 @@
   font-size: 12px;
 }
 
-/* Grill messages — slightly highlighted to show Q&A mode */
+/* Grill messages — warm tint for Q&A mode */
 .chatMsg_grill .chatBubble {
   background: rgba(255,200,60,0.05) !important;
   border: 1px solid rgba(255,200,60,0.10);
   color: rgba(255,255,255,0.78) !important;
 }
 
+/* Architect avatar — green circle with ◈ */
 .chatAvatar {
   width: 20px;
   height: 20px;
@@ -311,8 +362,10 @@
   color: rgba(255,255,255,0.72);
   border-bottom-left-radius: 3px;
 }
+/* User bubble — green tint to match architect identity */
 .chatMsg_user .chatBubble {
   background: rgba(0,255,136,0.09);
+  border: 1px solid rgba(0,255,136,0.14);
   color: rgba(255,255,255,0.82);
   border-bottom-right-radius: 3px;
 }
@@ -321,7 +374,7 @@
 .typingDots { display: flex; gap: 3px; align-items: center; height: 14px; }
 .typingDots span {
   width: 4px; height: 4px; border-radius: 50%;
-  background: rgba(255,255,255,0.3);
+  background: rgba(0,255,136,0.45);
   animation: typingBounce 1.2s infinite;
 }
 .typingDots span:nth-child(2) { animation-delay: 0.2s; }
