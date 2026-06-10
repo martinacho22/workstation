@@ -20,7 +20,7 @@ interface WorkstationState {
   // Multi-project registry
   projects: Project[]
   activeProjectId: string | null
-  createProject: (p: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => string
+  createProject: (p: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string>
   switchProject: (id: string) => void
   deleteProject: (id: string) => void
   getProjectMetas: () => ProjectMeta[]
@@ -129,10 +129,30 @@ export const useWorkstationStore = create<WorkstationState>()(
       projects: [],
       activeProjectId: null,
 
-      createProject: (p) => {
-        const id = nanoid(10)
+      createProject: async (p) => {
+        const id  = nanoid(10)
         const now = Date.now()
-        const newProject: Project = { ...p, id, createdAt: now, updatedAt: now }
+
+        // Create the project directory on disk (~/Workstation Projects/<name>/)
+        let projectDir: string | undefined
+        try {
+          const electronAPI = (window as any).electron
+          if (electronAPI?.fs?.createProjectDir) {
+            const result = await electronAPI.fs.createProjectDir(p.name)
+            if (result?.success) projectDir = result.projectDir
+          }
+        } catch (_) {
+          // Non-fatal — app works without it, just no auto-cwd
+        }
+
+        const newProject: Project = {
+          ...p,
+          id,
+          createdAt: now,
+          updatedAt: now,
+          ...(projectDir ? { projectDir } : {}),
+        }
+
         set((s) => {
           s.projects.push(newProject)
           s.activeProjectId = id
@@ -195,28 +215,29 @@ export const useWorkstationStore = create<WorkstationState>()(
             ? nodes
             : (p.nodes as Node<WorkstationNodeData>[]) ?? []
           const sections = pNodes.filter(n => n.data?.kind === 'section')
-          const done = sections.filter(n => n.data?.status === 'done').length
-          const blocked = sections.filter(n => n.data?.status === 'blocked').length
-          const total = sections.length
+          const done     = sections.filter(n => n.data?.status === 'done').length
+          const blocked  = sections.filter(n => n.data?.status === 'blocked').length
+          const total    = sections.length
           const openBugs = (p.bugs ?? []).filter(b => b.status === 'open').length
 
           let status: ProjectMeta['status'] = 'idle'
-          if (blocked > 0) status = 'blocked'
-          else if (done === total && total > 0) status = 'done'
+          if (blocked > 0)                                   status = 'blocked'
+          else if (done === total && total > 0)              status = 'done'
           else if (sections.some(n => n.data?.status === 'active')) status = 'active'
-          else if (total > 0) status = 'active'
+          else if (total > 0)                                status = 'active'
 
           return {
-            id: p.id,
-            name: p.name,
-            description: p.description,
-            stack: p.stack,
-            repoPath: p.repoPath,
-            progress: total > 0 ? Math.round((done / total) * 100) : 0,
-            sectionsTotal: total,
-            sectionsDone: done,
+            id:             p.id,
+            name:           p.name,
+            description:    p.description,
+            stack:          p.stack,
+            repoPath:       p.repoPath,
+            projectDir:     p.projectDir,
+            progress:       total > 0 ? Math.round((done / total) * 100) : 0,
+            sectionsTotal:  total,
+            sectionsDone:   done,
             openBugs,
-            lastActive: p.updatedAt,
+            lastActive:     p.updatedAt,
             status,
           } satisfies ProjectMeta
         })
@@ -277,7 +298,6 @@ RECOMMENDATION: [your recommended answer]`
         const state = get()
         const currentQuestion = state.grillQuestion?.split('\n\nRecommendation:')[0] ?? ''
 
-        // Save this answer
         const newAnswers = [
           ...state.grillAnswers,
           { question: currentQuestion, answer },
@@ -288,13 +308,11 @@ RECOMMENDATION: [your recommended answer]`
           s.grillQuestion = null
         })
 
-        // Are we done? After 6+ answers, check if we have enough
         if (newAnswers.length >= 6) {
           set((s) => { s.grillLoading = false })
           return
         }
 
-        // Ask next question
         const historyText = newAnswers
           .map(a => `Q: ${a.question}\nA: ${a.answer}`)
           .join('\n\n')
@@ -329,7 +347,6 @@ RECOMMENDATION: [your recommended answer]`
 
       finishGrill: () => {
         const state = get()
-        // Persist grill answers to project
         set((s) => {
           if (s.project) {
             s.project.grillAnswers = state.grillAnswers
@@ -414,11 +431,11 @@ Rules:
 
       addSectionNode: (label, position) => {
         const { nodes } = get()
-        const mainNodes = nodes.filter(n => n.data.kind === 'section' || n.data.kind === 'overview')
-        const rightmost = mainNodes.reduce((max, n) => Math.max(max, n.position.x), 0)
-        const pos = position ?? { x: rightmost + 520, y: 300 }
-        const node = makeNode('section', label, pos)
-        const lastMain = mainNodes[mainNodes.length - 1]
+        const mainNodes  = nodes.filter(n => n.data.kind === 'section' || n.data.kind === 'overview')
+        const rightmost  = mainNodes.reduce((max, n) => Math.max(max, n.position.x), 0)
+        const pos        = position ?? { x: rightmost + 520, y: 300 }
+        const node       = makeNode('section', label, pos)
+        const lastMain   = mainNodes[mainNodes.length - 1]
 
         set((s) => {
           s.nodes.push(node)
@@ -469,7 +486,6 @@ Rules:
         if (n) {
           n.data.chatHistory.push(msg)
           n.data.updatedAt = Date.now()
-          // Mark active when first message sent
           if (n.data.status === 'idle') n.data.status = 'active'
         }
       }),
@@ -477,7 +493,6 @@ Rules:
       endSession: async (nodeId: string) => {
         set((s) => { s.sessionLoading = true })
         await get().generateHandoffDoc(nodeId)
-        // Regenerate context snapshot for next session
         const ctx = get().generateContextBlock(nodeId)
         set((s) => {
           const n = s.nodes.find(n => n.id === nodeId)
@@ -491,17 +506,18 @@ Rules:
 
       buildProjectContext: (nodeId?: string): ProjectContext => {
         const { project, nodes } = get()
-        const currentNode = nodeId ? nodes.find(n => n.id === nodeId) : undefined
+        const currentNode  = nodeId ? nodes.find(n => n.id === nodeId) : undefined
         const sectionNodes = nodes.filter(n => n.data.kind === 'section' || n.data.kind === 'overview')
 
         return {
-          projectName: project?.name ?? 'Untitled',
-          projectDescription: project?.description ?? '',
-          stack: project?.stack ?? '',
-          repoPath: project?.repoPath,
+          projectName:          project?.name ?? 'Untitled',
+          projectDescription:   project?.description ?? '',
+          stack:                project?.stack ?? '',
+          repoPath:             project?.repoPath,
+          projectDir:           project?.projectDir,
           sections: sectionNodes.map(n => ({
-            label: n.data.label,
-            status: n.data.status,
+            label:       n.data.label,
+            status:      n.data.status,
             description: project?.blueprint?.find(b => b.label === n.data.label)?.description,
           })),
           adrs: (project?.adrs ?? []).map(a => ({
@@ -510,28 +526,29 @@ Rules:
           bugs: (project?.bugs ?? [])
             .filter(b => b.status === 'open')
             .map(b => ({ description: b.description, affectedSection: b.affectedSection, status: b.status })),
-          currentSection: currentNode?.data.label,
+          currentSection:        currentNode?.data.label,
           currentSectionPurpose: project?.blueprint?.find(b => b.label === currentNode?.data.label)?.description,
-          handoffSummary: currentNode?.data.handoffDoc
+          handoffSummary:        currentNode?.data.handoffDoc
             ? `Last session: ${currentNode.data.handoffDoc.currentStatus}. Next: ${currentNode.data.handoffDoc.nextSteps}`
             : undefined,
         }
       },
 
       generateContextBlock: (nodeId: string): string => {
-        const ctx = get().buildProjectContext(nodeId)
+        const ctx       = get().buildProjectContext(nodeId)
         const doneCount = ctx.sections.filter(s => s.status === 'done').length
-        const totalCount = ctx.sections.length
+        const total     = ctx.sections.length
+        const cwd       = ctx.projectDir ?? ctx.repoPath ?? '(not set)'
 
         return `# Workstation Context
-# Project: ${ctx.projectName} | Stack: ${ctx.stack} | Progress: ${doneCount}/${totalCount} sections done
-${ctx.repoPath ? `# Repo: ${ctx.repoPath}` : ''}
+# Project: ${ctx.projectName} | Stack: ${ctx.stack} | Progress: ${doneCount}/${total} sections done
+# Working directory: ${cwd}
 
 ## Working on: ${ctx.currentSection ?? 'Overview'}
 ${ctx.currentSectionPurpose ? `Goal: ${ctx.currentSectionPurpose}` : ''}
 ${ctx.handoffSummary ? `Last session: ${ctx.handoffSummary}` : 'First session in this section.'}
 
-## Sections
+## All Sections
 ${ctx.sections.map(s => `[${s.status === 'done' ? 'x' : s.status === 'blocked' ? '!' : ' '}] ${s.label}${s.description ? ' — ' + s.description : ''}`).join('\n')}
 
 ## Architecture Decisions
@@ -541,10 +558,10 @@ ${ctx.adrs.length > 0 ? ctx.adrs.map(a => `- ${a.title}: ${a.decision} (${a.reas
 ${ctx.bugs.length > 0 ? ctx.bugs.map(b => `- [${b.affectedSection}] ${b.description}`).join('\n') : 'None.'}
 
 ## Instructions
-You are helping build "${ctx.currentSection ?? 'this project'}" in ${ctx.projectName}.
-Stack: ${ctx.stack}.
+You are working on "${ctx.currentSection ?? 'this project'}" in ${ctx.projectName}.
+Stack: ${ctx.stack}. Working directory: ${cwd}.
 ${ctx.currentSectionPurpose ? `Your goal: ${ctx.currentSectionPurpose}` : ''}
-Write production-quality code. Ask before making large structural changes. Be concise.`
+Write production-quality code. Ask before large structural changes. Be concise.`
       },
 
       // ── Handoff Docs ──────────────────────────────────────────────────────
@@ -583,20 +600,20 @@ Return ONLY a JSON object:
 }`
 
         try {
-          const text = await runClaude(prompt)
+          const text  = await runClaude(prompt)
           const match = text.match(/\{[\s\S]*\}/)
           if (!match) return
           const parsed = JSON.parse(match[0])
           get().updateHandoffDoc(nodeId, {
             nodeId,
-            nodeLabel: node.data.label,
-            lastUpdated: Date.now(),
-            whatWasBuilt: parsed.whatWasBuilt ?? '',
+            nodeLabel:     node.data.label,
+            lastUpdated:   Date.now(),
+            whatWasBuilt:  parsed.whatWasBuilt  ?? '',
             decisionsMade: parsed.decisionsMade ?? '',
             currentStatus: parsed.currentStatus ?? '',
-            nextSteps: parsed.nextSteps ?? '',
-            filesChanged: parsed.filesChanged ?? [],
-            versions: [],
+            nextSteps:     parsed.nextSteps     ?? '',
+            filesChanged:  parsed.filesChanged  ?? [],
+            versions:      [],
           })
         } catch (err) {
           console.error('Handoff generation failed:', err)
@@ -686,6 +703,7 @@ Return ONLY a JSON object:
         let md = `# ${project?.name ?? 'Project'} — Handoff\n_${now}_\n\n`
         md += `**Stack:** ${project?.stack ?? 'Unknown'}  \n`
         md += `**Description:** ${project?.description ?? ''}\n\n`
+        if (project?.projectDir) md += `**Project directory:** \`${project.projectDir}\`\n\n`
 
         if (project?.adrs?.length) {
           md += `## Architecture Decisions\n`
@@ -730,15 +748,15 @@ Return ONLY a JSON object:
 
     })),
     {
-      name: 'workstation-store-v2',
+      name: 'workstation-store-v3',
       partialize: (s) => ({
-        projects: s.projects,
+        projects:        s.projects,
         activeProjectId: s.activeProjectId,
-        project: s.project,
-        nodes: s.nodes,
-        edges: s.edges,
-        claudeCliPath: s.claudeCliPath,
-        grillAnswers: s.grillAnswers,
+        project:         s.project,
+        nodes:           s.nodes,
+        edges:           s.edges,
+        claudeCliPath:   s.claudeCliPath,
+        grillAnswers:    s.grillAnswers,
       }),
     }
   )
