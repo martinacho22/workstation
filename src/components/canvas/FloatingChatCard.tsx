@@ -1,80 +1,77 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useWorkstationStore } from '@/store/useWorkstationStore'
-import { streamClaude } from '@/lib/claudeRunner'
-import { ChatMessage } from '@/types'
-import { nanoid } from 'nanoid'
+import { useWorkstationStore }   from '@/store/useWorkstationStore'
+import { useChatSessionsStore }  from '@/store/chatSessionsStore'
+import { streamClaude }          from '@/lib/claudeRunner'
+import { ChatMessage }           from '@/types'
+import { nanoid }                from 'nanoid'
 import styles from './FloatingChatCard.module.css'
 
 /**
  * FloatingChatCard
  *
- * A draggable, minimisable chat card that floats above the canvas.
- * - Spawns on the right side when a node becomes active
- * - Can be dragged anywhere
- * - Minimise → collapses to a small pill (stays visible)
- * - Clicking another node → chat collapses into that node's accent dot
+ * One instance per open chat session. Position and minimised state are
+ * managed in chatSessionsStore so they persist across re-renders and
+ * multiple cards can be open simultaneously.
+ *
+ * Minimised → shows as an accent pill (draggable).
+ * Close → removes from store entirely.
  */
 
 interface Props {
   nodeId: string
-  onClose: () => void
 }
 
-const DEFAULT_POS = { x: window.innerWidth - 400, y: 100 }
-
-export default function FloatingChatCard({ nodeId, onClose }: Props) {
+export default function FloatingChatCard({ nodeId }: Props) {
   const { nodes, project, addChatMessage, updateNodeStatus } = useWorkstationStore()
-  const node = nodes.find(n => n.id === nodeId)
+  const { sessions, closeChat, minimiseChat, updatePos }     = useChatSessionsStore()
+
+  const session = sessions[nodeId]
+  const node    = nodes.find(n => n.id === nodeId)
 
   const [input, setInput]               = useState('')
   const [streaming, setStreaming]       = useState(false)
   const [streamBuffer, setStreamBuffer] = useState('')
-  const [minimised, setMinimised]       = useState(false)
-  const [pos, setPos]                   = useState(DEFAULT_POS)
 
-  // Drag state
-  const dragging    = useRef(false)
-  const dragOffset  = useRef({ x: 0, y: 0 })
-  const cardRef     = useRef<HTMLDivElement>(null)
-  const bottomRef   = useRef<HTMLDivElement>(null)
-  const inputRef    = useRef<HTMLTextAreaElement>(null)
+  // Drag
+  const dragging   = useRef(false)
+  const dragOffset = useRef({ x: 0, y: 0 })
+  const cardRef    = useRef<HTMLDivElement>(null)
+  const bottomRef  = useRef<HTMLDivElement>(null)
+  const inputRef   = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [node?.data.chatHistory, streamBuffer])
 
   useEffect(() => {
-    if (!minimised) inputRef.current?.focus()
-  }, [minimised, nodeId])
+    if (session && !session.minimised) inputRef.current?.focus()
+  }, [session?.minimised, nodeId])
 
-  // ── Drag handlers ─────────────────────────────────────────────────────────
+  // ── Drag ──────────────────────────────────────────────────────────────────
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
-    // Only drag from the header
-    dragging.current = true
-    dragOffset.current = {
-      x: e.clientX - pos.x,
-      y: e.clientY - pos.y,
-    }
+    dragging.current   = true
+    const pos          = session?.pos ?? { x: window.innerWidth - 400, y: 90 }
+    dragOffset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y }
     e.preventDefault()
-  }, [pos])
+  }, [session?.pos])
 
   useEffect(() => {
-    function onMouseMove(e: MouseEvent) {
+    function onMove(e: MouseEvent) {
       if (!dragging.current) return
-      setPos({
-        x: Math.max(0, Math.min(window.innerWidth  - 360, e.clientX - dragOffset.current.x)),
+      updatePos(nodeId, {
+        x: Math.max(0,  Math.min(window.innerWidth  - 360, e.clientX - dragOffset.current.x)),
         y: Math.max(40, Math.min(window.innerHeight - 80,  e.clientY - dragOffset.current.y)),
       })
     }
-    function onMouseUp() { dragging.current = false }
-    window.addEventListener('mousemove', onMouseMove)
-    window.addEventListener('mouseup',   onMouseUp)
+    function onUp() { dragging.current = false }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup',   onUp)
     return () => {
-      window.removeEventListener('mousemove', onMouseMove)
-      window.removeEventListener('mouseup',   onMouseUp)
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup',   onUp)
     }
-  }, [])
+  }, [nodeId, updatePos])
 
   // ── Chat ──────────────────────────────────────────────────────────────────
 
@@ -95,12 +92,11 @@ export default function FloatingChatCard({ nodeId, onClose }: Props) {
       blueprint?.description ? `Goal: ${blueprint.description}` : '',
       node.data.handoffDoc
         ? `Last session: ${node.data.handoffDoc.currentStatus}. Next: ${node.data.handoffDoc.nextSteps}`
-        : 'First session.',
-      `This chat is for planning and thinking through the approach.`,
-      `Be concise and direct. Ask before large structural changes.`,
+        : 'First session on this section.',
+      `This chat is for planning and thinking through the approach. Be concise and direct.`,
     ].filter(Boolean).join('\n')
 
-    const histCtx  = node.data.chatHistory.slice(-10)
+    const histCtx   = node.data.chatHistory.slice(-10)
       .map(m => `${m.role === 'user' ? 'Human' : 'Assistant'}: ${m.content}`)
       .join('\n')
     const fullPrompt = histCtx
@@ -109,7 +105,7 @@ export default function FloatingChatCard({ nodeId, onClose }: Props) {
 
     try {
       let accumulated = ''
-      const fullText = await streamClaude(fullPrompt, (chunk) => {
+      const fullText  = await streamClaude(fullPrompt, (chunk) => {
         accumulated += chunk
         setStreamBuffer(accumulated)
       }, { skipPermissions: false, systemPrompt })
@@ -119,7 +115,6 @@ export default function FloatingChatCard({ nodeId, onClose }: Props) {
         id: nanoid(), role: 'assistant',
         content: fullText || accumulated, timestamp: Date.now(),
       })
-      // Auto-mark active when first message is sent
       if (node.data.status === 'idle') updateNodeStatus(node.id, 'active')
     } catch (err) {
       setStreamBuffer('')
@@ -133,21 +128,23 @@ export default function FloatingChatCard({ nodeId, onClose }: Props) {
     }
   }
 
-  if (!node) return null
+  // ── Guard ─────────────────────────────────────────────────────────────────
 
-  const blueprint   = project?.blueprint?.find(b => b.label === node.data.label)
-  const msgCount    = node.data.chatHistory.length
+  if (!node || !session) return null
+
+  const blueprint  = project?.blueprint?.find(b => b.label === node.data.label)
+  const msgCount   = node.data.chatHistory.length
+  const pos        = session.pos
 
   // ── Minimised pill ────────────────────────────────────────────────────────
 
-  if (minimised) {
+  if (session.minimised) {
     return (
       <div
         className={styles.pill}
         style={{ left: pos.x, top: pos.y }}
-        onClick={() => setMinimised(false)}
         onMouseDown={onMouseDown}
-        ref={cardRef}
+        onClick={() => useChatSessionsStore.getState().restoreChat(nodeId)}
       >
         <span className={styles.pillDot} />
         <span className={styles.pillLabel}>{node.data.label}</span>
@@ -164,7 +161,7 @@ export default function FloatingChatCard({ nodeId, onClose }: Props) {
       style={{ left: pos.x, top: pos.y }}
       ref={cardRef}
     >
-      {/* Drag handle */}
+      {/* Drag handle / header */}
       <div className={styles.header} onMouseDown={onMouseDown}>
         <div className={styles.headerLeft}>
           <span className={styles.accentDot} />
@@ -174,20 +171,8 @@ export default function FloatingChatCard({ nodeId, onClose }: Props) {
           )}
         </div>
         <div className={styles.headerActions}>
-          <button
-            className={styles.iconBtn}
-            onClick={() => setMinimised(true)}
-            title="Minimise"
-          >
-            –
-          </button>
-          <button
-            className={styles.iconBtn}
-            onClick={onClose}
-            title="Close"
-          >
-            ×
-          </button>
+          <button className={styles.iconBtn} onClick={() => minimiseChat(nodeId)} title="Minimise">–</button>
+          <button className={styles.iconBtn} onClick={() => closeChat(nodeId)}    title="Close">×</button>
         </div>
       </div>
 
@@ -199,26 +184,20 @@ export default function FloatingChatCard({ nodeId, onClose }: Props) {
             <div className={styles.emptyHint}>
               {node.data.handoffDoc
                 ? `Continuing: ${node.data.handoffDoc.currentStatus}`
-                : 'Ask a planning question or think through the approach here.'}
+                : 'Plan the approach here. Code in Claude Code below.'}
             </div>
           </div>
         )}
 
         {node.data.chatHistory.map(msg => (
           <div key={msg.id} className={`${styles.msg} ${styles[`msg_${msg.role}`]}`}>
-            <span className={styles.roleLabel}>
-              {msg.role === 'user' ? 'You' : 'Claude'}
-            </span>
+            <span className={styles.roleLabel}>{msg.role === 'user' ? 'You' : 'Claude'}</span>
             <div className={styles.msgContent}>
               {msg.content.split('\n').map((line, i) => (
-                <p
-                  key={i}
-                  className={
-                    line.startsWith('    ') || line.startsWith('\t')
-                      ? styles.codeLine
-                      : styles.textLine
-                  }
-                >
+                <p key={i} className={
+                  line.startsWith('    ') || line.startsWith('\t')
+                    ? styles.codeLine : styles.textLine
+                }>
                   {line || <br />}
                 </p>
               ))}
