@@ -5,10 +5,10 @@
 
 .terminal {
   position: absolute;
-  top: calc(100% + 12px);   /* 12px gap below the node */
+  top: calc(100% + 12px);
   left: 50%;
   transform: translateX(-50%);
-  width: 280px;
+  width: 300px;
   background: var(--bg, #0d0d14);
   border: 1px solid rgba(0,255,136,0.28);
   border-radius: 10px;
@@ -152,7 +152,47 @@
   line-height: 1.4;
 }
 
-/* Launch button */
+/* ─── Error state ──────────────────────────────────────────────────────────── */
+
+.errorBox {
+  margin: 8px 12px 0;
+  padding: 10px;
+  background: rgba(255, 60, 60, 0.07);
+  border: 1px solid rgba(255, 60, 60, 0.25);
+  border-radius: 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.errorText {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 10px;
+  color: rgba(255, 100, 100, 0.85);
+  line-height: 1.55;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.diagBtn {
+  background: rgba(255,60,60,0.08);
+  border: 1px solid rgba(255,60,60,0.2);
+  color: rgba(255,100,100,0.6);
+  font-size: 10px;
+  padding: 4px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-family: inherit;
+  align-self: flex-start;
+  transition: all 0.15s;
+}
+.diagBtn:hover { background: rgba(255,60,60,0.14); color: rgba(255,100,100,0.9); }
+
+/* ─── Launch button ─────────────────────────────────────────────────────────── */
+
 .launchBtn {
   margin: 10px 12px;
   background: rgba(0,255,136,0.12);
@@ -175,6 +215,13 @@
   border-color: rgba(74,222,128,0.18);
   color: rgba(74,222,128,0.6);
 }
+
+.launchRetry {
+  background: rgba(255, 160, 50, 0.1);
+  border-color: rgba(255, 160, 50, 0.3);
+  color: rgba(255, 180, 80, 0.9);
+}
+.launchRetry:hover:not(:disabled) { background: rgba(255, 160, 50, 0.18); }
 
 .launchedNote {
   font-size: 10px;
