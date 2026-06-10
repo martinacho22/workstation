@@ -19,6 +19,7 @@ import { DependencyEdge, FlowEdge } from '@/components/edges'
 import FloatingChatCard           from '@/components/canvas/FloatingChatCard'
 import SessionTray                from '@/components/canvas/SessionTray'
 import Toolbar                    from '@/components/canvas/Toolbar'
+import ColumnLabels               from '@/components/canvas/ColumnLabels'
 import ProjectSetup               from '@/components/canvas/ProjectSetup'
 import OrchestratorPanel          from '@/components/orchestrator/OrchestratorPanel'
 import Sidebar                    from '@/components/layout/Sidebar'
@@ -133,6 +134,9 @@ export default function App() {
 
                   {/* Canvas — full remaining height */}
                   <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+                    {/* Column labels + swim lane backgrounds — rendered BELOW ReactFlow */}
+                    <ColumnLabels />
+
                     <ReactFlow
                       nodes={nodes}
                       edges={edges}
