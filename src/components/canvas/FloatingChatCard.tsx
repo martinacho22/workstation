@@ -9,12 +9,9 @@ import styles from './FloatingChatCard.module.css'
 /**
  * FloatingChatCard
  *
- * One instance per open chat session. Position and minimised state are
- * managed in chatSessionsStore so they persist across re-renders and
- * multiple cards can be open simultaneously.
- *
- * Minimised → shows as an accent pill (draggable).
- * Close → removes from store entirely.
+ * One instance per open chat session. Draggable, free-floating above canvas.
+ * Minimised state: card hides entirely — SessionTray owns the pill UI.
+ * Close: removes from store, pill disappears from tray.
  */
 
 interface Props {
@@ -96,7 +93,7 @@ export default function FloatingChatCard({ nodeId }: Props) {
       `This chat is for planning and thinking through the approach. Be concise and direct.`,
     ].filter(Boolean).join('\n')
 
-    const histCtx   = node.data.chatHistory.slice(-10)
+    const histCtx    = node.data.chatHistory.slice(-10)
       .map(m => `${m.role === 'user' ? 'Human' : 'Assistant'}: ${m.content}`)
       .join('\n')
     const fullPrompt = histCtx
@@ -128,30 +125,16 @@ export default function FloatingChatCard({ nodeId }: Props) {
     }
   }
 
-  // ── Guard ─────────────────────────────────────────────────────────────────
+  // ── Guards ────────────────────────────────────────────────────────────────
 
+  // No session or node → render nothing
   if (!node || !session) return null
 
-  const blueprint  = project?.blueprint?.find(b => b.label === node.data.label)
-  const msgCount   = node.data.chatHistory.length
-  const pos        = session.pos
+  // Minimised → render nothing here; SessionTray owns the pill
+  if (session.minimised) return null
 
-  // ── Minimised pill ────────────────────────────────────────────────────────
-
-  if (session.minimised) {
-    return (
-      <div
-        className={styles.pill}
-        style={{ left: pos.x, top: pos.y }}
-        onMouseDown={onMouseDown}
-        onClick={() => useChatSessionsStore.getState().restoreChat(nodeId)}
-      >
-        <span className={styles.pillDot} />
-        <span className={styles.pillLabel}>{node.data.label}</span>
-        {msgCount > 0 && <span className={styles.pillCount}>{msgCount}</span>}
-      </div>
-    )
-  }
+  const blueprint = project?.blueprint?.find(b => b.label === node.data.label)
+  const pos       = session.pos
 
   // ── Full card ─────────────────────────────────────────────────────────────
 
@@ -171,8 +154,22 @@ export default function FloatingChatCard({ nodeId }: Props) {
           )}
         </div>
         <div className={styles.headerActions}>
-          <button className={styles.iconBtn} onClick={() => minimiseChat(nodeId)} title="Minimise">–</button>
-          <button className={styles.iconBtn} onClick={() => closeChat(nodeId)}    title="Close">×</button>
+          {/* Minimise — hides card, pill appears in SessionTray */}
+          <button
+            className={styles.iconBtn}
+            onClick={() => minimiseChat(nodeId)}
+            title="Minimise — keeps session alive in tray"
+          >
+            –
+          </button>
+          {/* Close — ends session, removes from tray */}
+          <button
+            className={styles.iconBtnClose}
+            onClick={() => closeChat(nodeId)}
+            title="Close session"
+          >
+            ×
+          </button>
         </div>
       </div>
 
@@ -184,7 +181,7 @@ export default function FloatingChatCard({ nodeId }: Props) {
             <div className={styles.emptyHint}>
               {node.data.handoffDoc
                 ? `Continuing: ${node.data.handoffDoc.currentStatus}`
-                : 'Plan the approach here. Code in Claude Code below.'}
+                : 'Plan the approach here. Code runs in Claude Code below.'}
             </div>
           </div>
         )}
