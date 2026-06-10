@@ -1,7 +1,8 @@
 const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron')
 const path = require('path')
-const os  = require('os')
-const fs  = require('fs')
+const os   = require('os')
+const fs   = require('fs')
+const { execSync } = require('child_process')
 
 let pty
 try { pty = require('node-pty') } catch (_) { pty = null }
@@ -11,6 +12,33 @@ const { registerClaudeBridgeHandlers, setClaudePath } = require('./claudeBridge'
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
 let mainWindow
+
+// ─── Resolve full PATH so Electron can find `claude` ─────────────────────────
+// On macOS, apps launched from Finder/Dock don't inherit the shell PATH,
+// so `claude` (installed via npm -g) is invisible to child_process.
+// We ask the user's login shell for its PATH and merge it in at startup.
+function resolveShellPath() {
+  try {
+    const shellBin = process.env.SHELL || '/bin/zsh'
+    const result   = execSync(`${shellBin} -l -c 'echo $PATH'`, {
+      timeout: 3000,
+      encoding: 'utf8',
+    }).trim()
+    if (result) {
+      process.env.PATH = result
+    }
+  } catch (_) {
+    // fallback — add common npm global bin paths manually
+    const extras = [
+      path.join(os.homedir(), '.npm-global', 'bin'),
+      path.join(os.homedir(), '.nvm', 'versions', 'node', 'current', 'bin'),
+      '/usr/local/bin',
+      '/opt/homebrew/bin',
+    ]
+    const existing = (process.env.PATH || '').split(':')
+    process.env.PATH = [...new Set([...extras, ...existing])].join(':')
+  }
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -39,6 +67,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  resolveShellPath()   // ← must happen before any child_process spawns
   createWindow()
   registerClaudeBridgeHandlers()
   app.on('activate', () => {
@@ -55,42 +84,94 @@ app.on('window-all-closed', () => {
 const terminals = {}
 
 ipcMain.handle('terminal:create', (event, { id, shell: shellCmd, skipPermissions, cwd, presetPrompt }) => {
-  if (!pty) return { success: false, error: 'node-pty not available — run npm install' }
+  if (!pty) {
+    return {
+      success: false,
+      error: 'node-pty is not installed.\n\nRun: npm install\n\nThen restart Workstation.',
+    }
+  }
 
-  const shellToUse  = shellCmd || (os.platform() === 'win32' ? 'powershell.exe' : process.env.SHELL || 'bash')
-  const isClaudeCode = shellCmd === 'claude'
-  const launchArgs  = isClaudeCode && skipPermissions ? ['--dangerously-skip-permissions'] : []
-
-  // Resolve cwd: use provided path, fall back to home
+  // Resolve working directory
   const workDir = (cwd && fs.existsSync(cwd)) ? cwd : os.homedir()
 
-  const ptyProcess = pty.spawn(shellToUse, launchArgs, {
-    name: 'xterm-256color',
-    cols: 120,
-    rows: 40,
-    cwd: workDir,
-    env: process.env,
-  })
+  let ptyProcess
+
+  if (shellCmd === 'claude') {
+    // ── Launch Claude Code directly ─────────────────────────────────────────
+    // Find claude binary — check common locations if not on PATH
+    let claudeBin = 'claude'
+    try {
+      claudeBin = execSync('which claude', { encoding: 'utf8', env: process.env }).trim()
+    } catch (_) {
+      // Try known npm global bin locations
+      const candidates = [
+        path.join(os.homedir(), '.npm-global', 'bin', 'claude'),
+        path.join(os.homedir(), '.nvm', 'versions', 'node', 'current', 'bin', 'claude'),
+        '/usr/local/bin/claude',
+        '/opt/homebrew/bin/claude',
+      ]
+      for (const c of candidates) {
+        if (fs.existsSync(c)) { claudeBin = c; break }
+      }
+    }
+
+    const args = skipPermissions ? ['--dangerously-skip-permissions'] : []
+
+    try {
+      ptyProcess = pty.spawn(claudeBin, args, {
+        name: 'xterm-256color',
+        cols: 120,
+        rows: 40,
+        cwd:  workDir,
+        env:  process.env,
+      })
+    } catch (spawnErr) {
+      return {
+        success: false,
+        error: `Could not launch Claude Code: ${spawnErr.message}\n\nMake sure it is installed: npm install -g @anthropic-ai/claude-code`,
+      }
+    }
+
+  } else {
+    // ── Plain shell (bash / zsh) ────────────────────────────────────────────
+    const shellToUse = shellCmd || (os.platform() === 'win32' ? 'powershell.exe' : process.env.SHELL || '/bin/zsh')
+
+    try {
+      ptyProcess = pty.spawn(shellToUse, [], {
+        name: 'xterm-256color',
+        cols: 120,
+        rows: 40,
+        cwd:  workDir,
+        env:  process.env,
+      })
+    } catch (spawnErr) {
+      return { success: false, error: `Could not launch shell: ${spawnErr.message}` }
+    }
+  }
 
   terminals[id] = ptyProcess
 
   ptyProcess.onData(data => {
-    mainWindow.webContents.send(`terminal:data:${id}`, data)
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(`terminal:data:${id}`, data)
+    }
   })
 
   ptyProcess.onExit(() => {
     delete terminals[id]
-    mainWindow.webContents.send(`terminal:exit:${id}`)
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(`terminal:exit:${id}`)
+    }
   })
 
-  // If a preset prompt was provided, write it after a short delay
-  // so the shell/claude has time to initialise
+  // Send the preset prompt after a short delay so Claude Code has time to boot
   if (presetPrompt) {
+    const delay = shellCmd === 'claude' ? 2500 : 500
     setTimeout(() => {
       if (terminals[id]) {
         terminals[id].write(presetPrompt + '\r')
       }
-    }, isClaudeCode ? 2000 : 500)
+    }, delay)
   }
 
   return { success: true, resolvedCwd: workDir }
@@ -130,16 +211,11 @@ ipcMain.handle('dialog:openFolder', async () => {
 
 // ─── Project directory management ─────────────────────────────────────────────
 
-/**
- * Create (or verify) a project directory under ~/Workstation Projects/<name>
- * Returns { success, projectDir }
- */
 ipcMain.handle('fs:createProjectDir', (event, { projectName }) => {
   try {
     const base = path.join(os.homedir(), 'Workstation Projects')
     if (!fs.existsSync(base)) fs.mkdirSync(base, { recursive: true })
 
-    // Sanitise project name for filesystem
     const safeName = projectName
       .replace(/[^a-zA-Z0-9_\- ]/g, '')
       .trim()
@@ -149,10 +225,21 @@ ipcMain.handle('fs:createProjectDir', (event, { projectName }) => {
     const projectDir = path.join(base, safeName)
     if (!fs.existsSync(projectDir)) fs.mkdirSync(projectDir, { recursive: true })
 
-    // Write a minimal .workstation file so Claude Code knows the context
     const metaFile = path.join(projectDir, '.workstation')
     if (!fs.existsSync(metaFile)) {
       fs.writeFileSync(metaFile, JSON.stringify({ project: projectName, createdAt: Date.now() }, null, 2))
+    }
+
+    // Also write a CLAUDE.md so Claude Code immediately knows the context
+    const claudeMd = path.join(projectDir, 'CLAUDE.md')
+    if (!fs.existsSync(claudeMd)) {
+      fs.writeFileSync(claudeMd,
+        `# ${projectName}\n\nThis project is managed by Workstation.\n` +
+        `You are an expert developer working on this project.\n` +
+        `Always ask before making large structural changes.\n` +
+        `Prefer vertical slices over horizontal layers.\n` +
+        `Write tests alongside implementation.\n`
+      )
     }
 
     return { success: true, projectDir }
@@ -161,9 +248,6 @@ ipcMain.handle('fs:createProjectDir', (event, { projectName }) => {
   }
 })
 
-/**
- * Check if a directory exists and is accessible
- */
 ipcMain.handle('fs:checkDir', (event, { dirPath }) => {
   try {
     const exists = fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()
@@ -173,13 +257,21 @@ ipcMain.handle('fs:checkDir', (event, { dirPath }) => {
   }
 })
 
-/**
- * Open a project directory in Finder / Explorer
- */
 ipcMain.handle('fs:openInFinder', (event, { dirPath }) => {
   if (dirPath && fs.existsSync(dirPath)) {
     shell.openPath(dirPath)
     return { success: true }
   }
   return { success: false, error: 'Directory not found' }
+})
+
+// ─── Diagnostics — renderer can ask what's wrong ─────────────────────────────
+
+ipcMain.handle('diagnostics:pty', () => {
+  return {
+    ptyAvailable: !!pty,
+    path:         process.env.PATH,
+    shell:        process.env.SHELL,
+    home:         os.homedir(),
+  }
 })
