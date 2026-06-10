@@ -54,6 +54,7 @@ interface WorkstationState {
   onNodesChange:     (changes: NodeChange[]) => void
   onEdgesChange:     (changes: EdgeChange[]) => void
   addSectionNode:    (label: string, position?: { x: number; y: number }, description?: string) => string
+  addFlowEdge:       (source: string, target: string) => void
   updateNodeStatus:  (id: string, status: WorkstationNodeData['status'], blockedReason?: BlockedReason) => void
   deleteNode:        (id: string) => void
   renameNode:        (id: string, label: string) => void
@@ -471,11 +472,11 @@ Rules:
                 if (!alreadyExists) {
                   set((s) => {
                     s.edges.push({
-                      id:     nanoid(6),
+                      id:     `edge-${nanoid(6)}`,
                       source: fromNode.id,
                       target: toNode.id,
-                      type:   'flowEdge',
-                      data:   { kind: 'flow' },
+                      type:   'dependencyEdge',
+                      data:   { kind: 'dependency' },
                     })
                   })
                 }
@@ -506,6 +507,21 @@ Rules:
 
         set((s) => { s.nodes.push(node) })
         return node.id
+      },
+
+      addFlowEdge: (source: string, target: string) => {
+        set((s) => {
+          const alreadyExists = s.edges.some(e => e.source === source && e.target === target)
+          if (alreadyExists) return
+
+          s.edges.push({
+            id:     `edge-${nanoid(6)}`,
+            source,
+            target,
+            type:   'flowEdge',
+            data:   { kind: 'flow' },
+          })
+        })
       },
 
       updateNodeStatus: (id, status, blockedReason) =>
@@ -542,11 +558,9 @@ Rules:
                 description: n.description,
                 dependsOn:   n.depends ? [n.depends] : [],
               }))
-              // Run full 3-pass pipeline async — don't await here
               set((s) => {
                 if (s.project) s.project.blueprint = sections
               })
-              // For orchestrator SPAWN via chat, just apply directly (no critic)
               store.applyBlueprint(sections)
               break
             }
@@ -576,20 +590,7 @@ Rules:
               const fromNode = store.nodes.find(n => n.data.label === cmd.from)
               const toNode   = store.nodes.find(n => n.data.label === cmd.to)
               if (fromNode && toNode) {
-                const alreadyExists = store.edges.some(
-                  e => e.source === fromNode.id && e.target === toNode.id
-                )
-                if (!alreadyExists) {
-                  set((s) => {
-                    s.edges.push({
-                      id:     nanoid(6),
-                      source: fromNode.id,
-                      target: toNode.id,
-                      type:   'flowEdge',
-                      data:   { kind: 'flow' },
-                    })
-                  })
-                }
+                store.addFlowEdge(fromNode.id, toNode.id)
               }
               break
             }
