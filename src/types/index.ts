@@ -1,8 +1,8 @@
 // ─── Node Types ───────────────────────────────────────────────────────────────
 
-export type NodeKind = 'overview' | 'section' | 'tangent' | 'handoff' | 'deploy' | 'bug'
+export type NodeKind = 'section' | 'overview'
 
-export type NodeStatus = 'idle' | 'active' | 'done' | 'blocked' | 'minimized'
+export type NodeStatus = 'idle' | 'active' | 'done' | 'blocked'
 
 export interface BlockedReason {
   reason: string
@@ -15,27 +15,12 @@ export interface WorkstationNodeData {
   kind: NodeKind
   label: string
   status: NodeStatus
-  terminalId?: string
   chatHistory: ChatMessage[]
   handoffDoc?: HandoffDoc
-  skills: Skill[]
-  skipPermissions: boolean
   parentId?: string
-  resolvedTo?: string
   blockedReason?: BlockedReason
-  // Deploy node
-  deployTarget?: DeployTarget
-  deployStatus?: DeployStatus
-  deployUrl?: string
-  envVars?: EnvVar[]
-  // Bug node
-  bugDescription?: string
-  bugStepsToReproduce?: string
-  bugAffectedSection?: string
-  // Context injection
-  contextFile?: string
-  // Definition of done (per section)
   definitionOfDone?: string
+  contextSnapshot?: string   // last auto-generated context block
   createdAt: number
   updatedAt: number
   [key: string]: unknown
@@ -59,11 +44,10 @@ export interface HandoffDoc {
   nodeLabel: string
   lastUpdated: number
   whatWasBuilt: string
-  decisionsMAde: string
+  decisionsMade: string
   currentStatus: string
   nextSteps: string
   filesChanged: string[]
-  tangentsSummary?: string
   versions: HandoffDocVersion[]
 }
 
@@ -72,26 +56,34 @@ export interface HandoffDocVersion {
   snapshot: Omit<HandoffDoc, 'versions'>
 }
 
-// ─── Skills ───────────────────────────────────────────────────────────────────
+// ─── Bug ──────────────────────────────────────────────────────────────────────
 
-export type SkillId =
-  | 'memory'
-  | 'web_search'
-  | 'code_review'
-  | 'architecture'
-  | 'debugging'
-  | 'documentation'
-  | 'testing'
-  | 'deployment'
+export interface Bug {
+  id: string
+  description: string
+  stepsToReproduce?: string
+  affectedSection: string
+  status: 'open' | 'fixed'
+  createdAt: number
+  fixedAt?: number
+}
 
-export interface Skill {
-  id: SkillId
-  label: string
-  enabled: boolean
-  recommended?: boolean
+// ─── Session Decision ─────────────────────────────────────────────────────────
+
+export interface SessionDecision {
+  id: string
+  decision: string
+  reason: string
+  sectionId: string
+  createdAt: number
 }
 
 // ─── Project ──────────────────────────────────────────────────────────────────
+
+export interface GrillAnswer {
+  question: string
+  answer: string
+}
 
 export interface BlueprintSection {
   label: string
@@ -104,14 +96,15 @@ export interface Project {
   name: string
   description: string
   stack: string
-  deployTarget: DeployTarget
-  accentColor: string
+  repoPath?: string          // local path to the codebase
+  grillAnswers?: GrillAnswer[]
   blueprint?: BlueprintSection[]
   adrs?: ArchitectureDecisionRecord[]
-  completionChecklist?: CompletionChecklistItem[]
+  bugs?: Bug[]
+  decisions?: SessionDecision[]
   createdAt: number
   updatedAt: number
-  // Snapshot of nodes/edges for multi-project switching
+  // Canvas snapshot for multi-project switching
   nodes?: unknown[]
   edges?: unknown[]
 }
@@ -124,28 +117,9 @@ export interface ArchitectureDecisionRecord {
   createdAt: number
 }
 
-export interface CompletionChecklistItem {
-  id: string
-  label: string
-  done: boolean
-  sectionId?: string
-}
-
 // ─── Canvas Edge ─────────────────────────────────────────────────────────────
 
-export type EdgeKind = 'flow' | 'tangent-open' | 'tangent-resolved' | 'tieback'
-
-// ─── Deploy ──────────────────────────────────────────────────────────────────
-
-export type DeployTarget = 'vercel' | 'railway' | 'fly' | 'netlify' | 'none'
-
-export type DeployStatus = 'idle' | 'preflight' | 'deploying' | 'live' | 'failed'
-
-export interface EnvVar {
-  key: string
-  value: string
-  isSet: boolean
-}
+export type EdgeKind = 'flow' | 'dependency'
 
 // ─── Context File ─────────────────────────────────────────────────────────────
 
@@ -153,29 +127,27 @@ export interface ProjectContext {
   projectName: string
   projectDescription: string
   stack: string
-  deployTarget: string
+  repoPath?: string
   sections: { label: string; status: string; description?: string }[]
   adrs: { title: string; decision: string; reason: string }[]
+  bugs: { description: string; affectedSection: string; status: string }[]
   currentSection?: string
   currentSectionPurpose?: string
-  openTangents: { label: string; parentSection: string }[]
   handoffSummary?: string
 }
 
-// ─── Multi-project registry ───────────────────────────────────────────────────
+// ─── Project Meta (dashboard) ─────────────────────────────────────────────────
 
 export interface ProjectMeta {
   id: string
   name: string
   description: string
   stack: string
-  deployTarget: DeployTarget
-  accentColor: string
+  repoPath?: string
   progress: number
   sectionsTotal: number
   sectionsDone: number
   openBugs: number
-  openTangents: number
   lastActive: number
   status: 'active' | 'blocked' | 'done' | 'idle'
 }
