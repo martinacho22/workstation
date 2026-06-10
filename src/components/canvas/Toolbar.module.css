@@ -2,232 +2,117 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  background: var(--surface-1);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
   padding: 8px 14px;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.4);
-  position: relative;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+
+.left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .projectName {
-  display: flex;
-  align-items: center;
-  gap: 6px;
   font-size: 13px;
-  font-weight: 500;
-  color: var(--text-primary);
-  padding-right: 12px;
-  border-right: 1px solid var(--border-subtle);
+  font-weight: 600;
+  color: rgba(255,255,255,0.7);
+  white-space: nowrap;
 }
 
-.icon {
-  color: var(--accent);
-  font-size: 16px;
+.progress {
+  font-size: 11px;
+  color: rgba(255,255,255,0.3);
+  font-variant-numeric: tabular-nums;
 }
 
-.progressPill {
-  position: relative;
-  width: 120px;
-  height: 20px;
-  background: var(--surface-2);
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.progressBar {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  background: rgba(0, 255, 136, 0.2);
-  border-radius: 10px;
-  transition: width 0.6s ease;
-}
-
-.progressLabel {
-  position: relative;
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--accent);
-  font-family: var(--font-mono);
-  z-index: 1;
+.blockedCount {
+  color: rgba(240,192,64,0.6);
 }
 
 .actions {
   display: flex;
-  gap: 6px;
-  margin-left: auto;
   align-items: center;
+  gap: 8px;
 }
 
 .btn {
-  background: var(--surface-2);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  font-family: var(--font-sans);
+  background: var(--surface2, rgba(255,255,255,0.05));
+  border: 1px solid var(--border);
+  color: rgba(255,255,255,0.55);
   font-size: 12px;
-  padding: 5px 10px;
+  padding: 6px 12px;
+  border-radius: 7px;
   cursor: pointer;
   transition: all 0.15s;
   white-space: nowrap;
+  font-family: inherit;
 }
 
-.btn:hover:not(:disabled) {
-  background: var(--surface-3);
-  color: var(--text-primary);
-  border-color: var(--border-default);
+.btn:hover {
+  color: rgba(255,255,255,0.85);
+  border-color: rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.07);
 }
 
-.btn:disabled { opacity: 0.3; cursor: not-allowed; }
-
-.btnActive {
-  background: var(--accent-dim) !important;
-  color: var(--accent) !important;
-  border-color: rgba(0,255,136,0.3) !important;
-}
-
-.btnMuted { opacity: 0.5; }
-
-.btnWarn {
-  color: #f0c040;
-  border-color: rgba(240,165,0,0.3);
-}
-.btnWarn:hover {
-  background: rgba(240,165,0,0.1) !important;
-  color: #f0c040 !important;
-}
-
-/* Blueprint button */
-.blueprintBtn {
-  background: rgba(0, 255, 136, 0.07) !important;
-  border-color: rgba(0, 255, 136, 0.25) !important;
-  color: var(--accent) !important;
-  font-weight: 500;
-}
-.blueprintBtn:hover {
-  background: rgba(0, 255, 136, 0.14) !important;
-}
-
-/* Deploy button */
-.deployWrapper {
-  position: relative;
-}
-
-.deployBtn {
-  background: rgba(0, 200, 255, 0.07) !important;
-  border-color: rgba(0, 200, 255, 0.25) !important;
-  color: rgba(0, 200, 255, 0.9) !important;
-  font-weight: 500;
-}
-.deployBtn:hover {
-  background: rgba(0, 200, 255, 0.14) !important;
-}
-
-.deployMenu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  overflow: hidden;
-  z-index: 200;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-  min-width: 120px;
-}
-
-.deployOption {
-  display: block;
-  width: 100%;
-  text-align: left;
-  background: none;
-  border: none;
-  color: var(--text-secondary);
+.primaryBtn {
+  background: rgba(0,255,136,0.1);
+  border: 1px solid rgba(0,255,136,0.25);
+  color: rgba(0,255,136,0.85);
   font-size: 12px;
-  padding: 9px 14px;
+  padding: 6px 14px;
+  border-radius: 7px;
   cursor: pointer;
-  transition: all 0.12s;
-  font-family: var(--font-sans);
-}
-.deployOption:hover {
-  background: var(--surface2);
-  color: rgba(0, 200, 255, 0.9);
+  font-weight: 600;
+  transition: all 0.15s;
+  font-family: inherit;
 }
 
-/* Tangent hint */
-.tangentWrapper { position: relative; }
-
-.tangentHint {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--surface-2);
-  border: 1px solid rgba(240,165,0,0.3);
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 11px;
-  color: #f0c040;
-  white-space: nowrap;
-  z-index: 200;
-  pointer-events: none;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+.primaryBtn:hover {
+  background: rgba(0,255,136,0.15);
+  border-color: rgba(0,255,136,0.4);
+  color: rgba(0,255,136,1);
 }
 
-.inputOverlay {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
+.inputRow {
   display: flex;
-  gap: 6px;
   align-items: center;
-  background: var(--surface-1);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  padding: 8px 10px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-  z-index: 100;
-  min-width: 280px;
+  gap: 6px;
 }
 
-.nameInput {
-  flex: 1;
-  background: var(--surface-2);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 6px 10px;
-  color: var(--text-primary);
-  font-family: var(--font-sans);
+.input {
+  background: var(--bg);
+  border: 1px solid rgba(0,255,136,0.3);
+  color: rgba(255,255,255,0.85);
   font-size: 12px;
-  outline: none;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-family: inherit;
+  width: 180px;
 }
 
-.nameInput:focus { border-color: var(--border-bright); }
-.nameInput::placeholder { color: var(--text-muted); }
+.input:focus { outline: none; }
+.input::placeholder { color: rgba(255,255,255,0.2); }
 
 .confirmBtn {
-  background: var(--accent-dim);
-  border: 1px solid rgba(0,255,136,0.3);
-  color: var(--accent);
-  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: #000;
+  border: none;
   padding: 6px 12px;
+  border-radius: 6px;
   font-size: 12px;
-  font-family: var(--font-sans);
+  font-weight: 700;
   cursor: pointer;
 }
 
 .cancelBtn {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
+  background: none;
+  border: 1px solid var(--border);
+  color: rgba(255,255,255,0.3);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
   cursor: pointer;
-  font-size: 14px;
-  padding: 4px 6px;
 }
