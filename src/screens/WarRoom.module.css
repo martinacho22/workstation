@@ -1,49 +1,45 @@
 .page {
   flex: 1;
-  overflow-y: auto;
-  padding: 40px 48px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: var(--bg);
 }
 
 .header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  margin-bottom: 32px;
-  gap: 24px;
+  padding: 24px 32px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  gap: 20px;
 }
 
 .title {
-  font-size: 24px;
+  font-size: 18px;
   font-weight: 700;
-  color: #fff;
-  margin: 0 0 4px;
-  letter-spacing: -0.02em;
+  color: rgba(255,255,255,0.9);
+  margin: 0 0 3px;
 }
 
 .subtitle {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.35);
+  font-size: 12px;
+  color: rgba(255,255,255,0.3);
   margin: 0;
 }
 
 .headerRight {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-shrink: 0;
-}
-
-.progressPill {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
 }
 
 .progressBar {
   width: 160px;
-  height: 3px;
-  background: rgba(255, 255, 255, 0.08);
+  height: 4px;
+  background: rgba(255,255,255,0.06);
   border-radius: 2px;
   overflow: hidden;
 }
@@ -56,125 +52,96 @@
 }
 
 .progressLabel {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.3);
-  white-space: nowrap;
+  font-size: 11px;
+  color: rgba(255,255,255,0.3);
+  font-variant-numeric: tabular-nums;
 }
-
-.exportBtn {
-  padding: 8px 16px;
-  background: transparent;
-  border: 1px solid var(--accent);
-  border-radius: var(--radius);
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s;
-  white-space: nowrap;
-}
-.exportBtn:hover { background: rgba(0, 255, 136, 0.08); }
 
 /* Tabs */
 .tabs {
   display: flex;
-  gap: 4px;
-  margin-bottom: 24px;
   border-bottom: 1px solid var(--border);
-  padding-bottom: 0;
+  padding: 0 32px;
+  flex-shrink: 0;
 }
 
 .tab {
-  padding: 8px 16px;
-  background: transparent;
+  background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  color: rgba(255, 255, 255, 0.35);
+  color: rgba(255,255,255,0.35);
   font-size: 13px;
+  padding: 12px 16px;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 6px;
-  transition: color 0.15s;
+  transition: all 0.15s;
+  font-family: inherit;
   margin-bottom: -1px;
 }
-.tab:hover { color: rgba(255, 255, 255, 0.6); }
 
-.activeTab {
-  color: #fff;
+.tab:hover { color: rgba(255,255,255,0.65); }
+
+.tabActive {
+  color: rgba(255,255,255,0.9);
   border-bottom-color: var(--accent);
 }
 
-.tabCount {
-  padding: 1px 6px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+.badge {
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.4);
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.4);
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.badgeBug {
+  background: rgba(248,113,113,0.12);
+  color: rgba(248,113,113,0.7);
 }
 
 /* Content */
 .content {
   flex: 1;
+  overflow-y: auto;
+  padding: 28px 32px;
 }
 
-/* Overview grid */
-.overviewGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 12px;
-}
+.content::-webkit-scrollbar { width: 4px; }
+.content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 2px; }
 
-/* Alert card */
-.alertCard {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 14px 16px;
-  background: rgba(240, 192, 64, 0.05);
-  border: 1px solid rgba(240, 192, 64, 0.15);
-  border-radius: var(--radius);
-}
-
-.alertIndicator {
-  width: 3px;
-  height: 100%;
-  min-height: 32px;
-  border-radius: 2px;
-  flex-shrink: 0;
-}
-
-.alertTitle {
+.empty {
   font-size: 13px;
-  font-weight: 600;
-  color: #fff;
-  margin-bottom: 3px;
+  color: rgba(255,255,255,0.2);
+  padding: 32px 0;
+  text-align: center;
 }
 
-.alertDesc {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.35);
-}
-
-/* List */
-.list {
+/* Status grid */
+.statusGrid {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 8px;
 }
 
-.listItem {
+.sectionRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px;
+  padding: 12px 16px;
   background: var(--surface);
-  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  border-radius: 8px;
   gap: 12px;
+  transition: border-color 0.15s;
 }
 
-.listItemLeft {
+.section_done    { border-color: rgba(74,222,128,0.15); background: rgba(74,222,128,0.02); }
+.section_blocked { border-color: rgba(240,192,64,0.2); background: rgba(240,192,64,0.02); }
+
+.sectionLeft {
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -182,252 +149,327 @@
   min-width: 0;
 }
 
-.listItemName {
+.statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+
+.dot_idle    { background: rgba(255,255,255,0.15); }
+.dot_active  { background: var(--accent); opacity: 0.7; }
+.dot_done    { background: rgba(74,222,128,0.8); }
+.dot_blocked { background: rgba(240,192,64,0.8); }
+
+.sectionInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sectionName {
   font-size: 13px;
-  font-weight: 500;
-  color: #fff;
-  margin-bottom: 2px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.8);
 }
 
-.listItemSub {
+.sectionDesc {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.3);
+  color: rgba(255,255,255,0.3);
+  line-height: 1.4;
 }
 
-.blockedReason {
+.blockedNote {
   font-size: 11px;
-  color: #f0c040;
+  color: rgba(240,192,64,0.7);
   margin-top: 2px;
+}
+
+.sectionRight {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.chip {
+  font-size: 10px;
+  color: rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 3px;
+  padding: 1px 6px;
+}
+
+.chipHandoff {
+  color: rgba(0,255,136,0.5);
+  border-color: rgba(0,255,136,0.15);
 }
 
 .statusBadge {
   font-size: 11px;
   padding: 3px 8px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.4);
-  text-transform: capitalize;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.statusBadge[data-status="done"]    { background: rgba(74, 222, 128, 0.1); color: #4ade80; }
-.statusBadge[data-status="blocked"] { background: rgba(240, 192, 64, 0.1); color: #f0c040; }
-.statusBadge[data-status="active"]  { background: rgba(0, 255, 136, 0.1); color: var(--accent); }
-
-.bugDot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: #f87171;
-  flex-shrink: 0; margin-top: 5px;
+  text-transform: lowercase;
 }
 
-.tangentDot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0; margin-top: 5px;
+.badge_idle    { background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.25); }
+.badge_active  { background: rgba(0,255,136,0.06); color: rgba(0,255,136,0.6); }
+.badge_done    { background: rgba(74,222,128,0.08); color: rgba(74,222,128,0.7); }
+.badge_blocked { background: rgba(240,192,64,0.08); color: rgba(240,192,64,0.8); }
+
+/* Shared list panel */
+.listPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.handoffDot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  flex-shrink: 0; margin-top: 5px;
-}
-
-.deployDot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: #00c8ff;
-  flex-shrink: 0; margin-top: 5px;
-}
-
-.handoffItem { align-items: flex-start; }
-.viewBtn {
-  padding: 5px 12px;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  color: rgba(255,255,255,0.4);
-  font-size: 11px;
-  cursor: pointer;
-}
-.viewBtn:hover { color: #fff; border-color: rgba(255,255,255,0.2); }
-
-/* ADRs */
-.adrPanel { display: flex; flex-direction: column; gap: 16px; }
-
-.adrHeader {
+.panelHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  margin-bottom: 4px;
 }
 
-.adrHeaderText {
+.panelMeta {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.3);
+  color: rgba(255,255,255,0.3);
+  line-height: 1.5;
+  max-width: 420px;
 }
 
-.addAdrBtn {
+.addBtn {
+  background: none;
+  border: 1px dashed rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.4);
   padding: 7px 14px;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  color: rgba(255,255,255,0.5);
+  border-radius: 7px;
   font-size: 12px;
   cursor: pointer;
-  white-space: nowrap;
+  font-family: inherit;
+  transition: all 0.15s;
+  flex-shrink: 0;
 }
-.addAdrBtn:hover { border-color: var(--accent); color: var(--accent); }
 
-.adrForm {
+.addBtn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Form */
+.form {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 16px;
+  padding: 14px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 8px;
 }
 
-.adrInput {
-  padding: 8px 12px;
+.formInput {
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  color: #fff;
+  color: rgba(255,255,255,0.8);
   font-size: 13px;
-  outline: none;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
 }
-.adrInput:focus { border-color: var(--accent); }
-.adrInput::placeholder { color: rgba(255,255,255,0.2); }
 
-.saveAdrBtn {
-  padding: 8px 16px;
+.formInput:focus {
+  outline: none;
+  border-color: rgba(0,255,136,0.3);
+}
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.formSubmit {
   background: var(--accent);
   color: #000;
   border: none;
-  border-radius: var(--radius);
+  padding: 8px 16px;
+  border-radius: 6px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  align-self: flex-start;
 }
 
-.adrItem {
+.formSubmit:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* Bug rows */
+.bugGroup {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  padding: 14px 16px;
-  background: var(--surface);
-  border-radius: var(--radius);
-  gap: 12px;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.adrItemLeft {
+.bugGroupLabel {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255,255,255,0.2);
+  margin-bottom: 2px;
+}
+
+.bugRow {
   display: flex;
   align-items: flex-start;
   gap: 10px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid rgba(248,113,113,0.1);
+  border-radius: 7px;
+}
+
+.bugRowFixed {
+  border-color: var(--border);
+  opacity: 0.5;
+}
+
+.bugDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(248,113,113,0.8);
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+.bugDotFixed { background: rgba(74,222,128,0.5); }
+
+.bugInfo {
   flex: 1;
+  min-width: 0;
+}
+
+.bugDesc {
+  font-size: 13px;
+  color: rgba(255,255,255,0.75);
+  line-height: 1.4;
+}
+
+.bugMeta {
+  font-size: 11px;
+  color: rgba(255,255,255,0.25);
+  margin-top: 2px;
+}
+
+.bugActions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.fixBtn {
+  background: rgba(74,222,128,0.08);
+  border: 1px solid rgba(74,222,128,0.2);
+  color: rgba(74,222,128,0.7);
+  padding: 4px 10px;
+  border-radius: 5px;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.deleteBtn {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.2);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 6px;
+  transition: color 0.15s;
+}
+
+.deleteBtn:hover { color: rgba(248,113,113,0.7); }
+
+/* ADR rows */
+.adrRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
 }
 
 .adrDot {
-  width: 8px; height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--accent);
-  flex-shrink: 0; margin-top: 5px;
-}
-
-.adrTitle { font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 3px; }
-.adrDecision { font-size: 12px; color: rgba(255,255,255,0.5); margin-bottom: 2px; }
-.adrReason { font-size: 11px; color: rgba(255,255,255,0.25); }
-
-.deleteAdrBtn {
-  padding: 4px 8px;
-  background: transparent;
-  border: none;
-  color: rgba(255,255,255,0.2);
-  font-size: 11px;
-  cursor: pointer;
+  opacity: 0.5;
   flex-shrink: 0;
-}
-.deleteAdrBtn:hover { color: #f87171; }
-
-/* Checklist */
-.checklistPanel { display: flex; flex-direction: column; gap: 16px; }
-
-.checklistHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  margin-top: 5px;
 }
 
-.checklistHeaderText {
-  font-size: 12px;
-  color: rgba(255,255,255,0.3);
-}
-
-.generateChecklistBtn {
-  padding: 7px 14px;
-  background: var(--accent);
-  color: #000;
-  border: none;
-  border-radius: var(--radius);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.generateChecklistBtn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.checklist { display: flex; flex-direction: column; gap: 4px; }
-
-.checklistItem {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  background: var(--surface);
-  border-radius: var(--radius);
-  cursor: pointer;
-  transition: background 0.1s;
-}
-.checklistItem:hover { background: var(--surface2); }
-
-.checklistItemDone { opacity: 0.5; }
-
-.checkbox {
-  width: 16px; height: 16px;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 10px; color: #000;
-  flex-shrink: 0;
-  transition: background 0.15s, border-color 0.15s;
-}
-.checkboxDone { background: var(--accent); border-color: var(--accent); }
-
-.checklistLabel {
+.adrInfo {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.adrTitle {
   font-size: 13px;
+  font-weight: 600;
   color: rgba(255,255,255,0.8);
 }
 
-.checklistSection {
-  font-size: 10px;
-  color: rgba(255,255,255,0.2);
-  padding: 2px 7px;
-  background: rgba(255,255,255,0.04);
-  border-radius: 4px;
+.adrDecision {
+  font-size: 12px;
+  color: rgba(255,255,255,0.5);
+  line-height: 1.4;
 }
 
-.allDone {
-  padding: 16px;
-  background: rgba(0, 255, 136, 0.05);
-  border: 1px solid rgba(0, 255, 136, 0.15);
-  border-radius: var(--radius);
+.adrReason {
+  font-size: 11px;
+  color: rgba(255,255,255,0.25);
+  line-height: 1.4;
+  font-style: italic;
+}
+
+/* Export */
+.exportPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 480px;
+}
+
+.exportDesc {
   font-size: 13px;
-  color: var(--accent);
-  text-align: center;
+  color: rgba(255,255,255,0.45);
+  line-height: 1.6;
+}
+
+.exportBtn {
+  background: var(--accent);
+  color: #000;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  align-self: flex-start;
+  transition: opacity 0.15s;
+}
+
+.exportBtn:hover { opacity: 0.85; }
+
+.exportNote {
+  font-size: 11px;
+  color: rgba(255,255,255,0.2);
+  line-height: 1.5;
 }
