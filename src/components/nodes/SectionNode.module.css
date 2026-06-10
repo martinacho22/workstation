@@ -15,13 +15,15 @@
   box-shadow: 0 4px 20px rgba(0,0,0,0.3);
 }
 
-.node:hover .openHint {
-  opacity: 1;
+.selected {
+  border-color: rgba(0,255,136,0.28);
+  box-shadow: 0 0 0 1px rgba(0,255,136,0.12);
 }
 
-.selected {
-  border-color: rgba(0,255,136,0.35);
-  box-shadow: 0 0 0 1px rgba(0,255,136,0.15);
+/* Active = workspace is open for this node */
+.active {
+  border-color: rgba(0,255,136,0.5) !important;
+  box-shadow: 0 0 0 2px rgba(0,255,136,0.18), 0 4px 20px rgba(0,0,0,0.35) !important;
 }
 
 .done {
@@ -43,6 +45,18 @@
   width: 3px;
   border-radius: 10px 0 0 10px;
   transition: background 0.2s;
+}
+
+/* Active bottom indicator */
+.activeBar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent, #00ff88);
+  opacity: 0.6;
+  border-radius: 0 0 10px 10px;
 }
 
 .body {
@@ -72,7 +86,6 @@
   width: 100%;
   font-family: inherit;
 }
-
 .renameInput:focus { outline: none; }
 
 .desc {
@@ -102,22 +115,13 @@
   margin-top: 4px;
 }
 
-.statusLabel {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
+.statusLabel { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
 .status_idle    { color: rgba(255,255,255,0.2); }
 .status_active  { color: var(--accent); opacity: 0.7; }
 .status_done    { color: rgba(74,222,128,0.6); }
 .status_blocked { color: rgba(240,192,64,0.7); }
 
-.footerRight {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
+.footerRight { display: flex; align-items: center; gap: 4px; }
 
 .metaChip {
   font-size: 10px;
@@ -127,21 +131,12 @@
   padding: 1px 5px;
 }
 
-/* Open session hover hint */
-.openHint {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0,0,0,0.6);
-  color: rgba(255,255,255,0.8);
-  font-size: 12px;
-  font-weight: 500;
-  opacity: 0;
-  transition: opacity 0.15s;
-  border-radius: 10px;
-  backdrop-filter: blur(2px);
+/* Handle */
+.handle {
+  width: 8px;
+  height: 8px;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.15);
 }
 
 /* Context menu */
@@ -170,29 +165,12 @@
   border-radius: 5px;
   cursor: pointer;
   transition: background 0.1s, color 0.1s;
+  font-family: inherit;
 }
-
-.menuItem:hover {
-  background: rgba(255,255,255,0.06);
-  color: rgba(255,255,255,0.9);
-}
-
+.menuItem:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.9); }
 .menuItemDanger { color: rgba(248,113,113,0.7); }
 .menuItemDanger:hover { background: rgba(248,113,113,0.08); color: rgba(248,113,113,0.9); }
-
-.menuDivider {
-  height: 1px;
-  background: var(--border);
-  margin: 4px 0;
-}
-
-/* Handle */
-.handle {
-  width: 8px;
-  height: 8px;
-  background: rgba(255,255,255,0.1);
-  border: 1px solid rgba(255,255,255,0.15);
-}
+.menuDivider { height: 1px; background: var(--border); margin: 4px 0; }
 
 /* Block modal */
 .modalBackdrop {
@@ -204,7 +182,6 @@
   align-items: center;
   justify-content: center;
 }
-
 .modal {
   background: var(--surface2, #1a1a24);
   border: 1px solid var(--border);
@@ -215,53 +192,19 @@
   flex-direction: column;
   gap: 10px;
 }
-
-.modalTitle {
-  font-size: 14px;
-  font-weight: 600;
-  color: rgba(255,255,255,0.85);
-  margin: 0;
-}
-
+.modalTitle { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.85); margin: 0; }
 .modalInput, .modalSelect {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: rgba(255,255,255,0.8);
-  font-size: 13px;
-  padding: 8px 10px;
-  border-radius: 6px;
-  font-family: inherit;
-  width: 100%;
+  background: var(--bg); border: 1px solid var(--border); color: rgba(255,255,255,0.8);
+  font-size: 13px; padding: 8px 10px; border-radius: 6px; font-family: inherit; width: 100%;
 }
-
 .modalInput:focus, .modalSelect:focus { outline: none; border-color: rgba(0,255,136,0.3); }
-
-.modalActions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  margin-top: 4px;
-}
-
+.modalActions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
 .modalCancel {
-  background: none;
-  border: 1px solid var(--border);
-  color: rgba(255,255,255,0.4);
-  padding: 6px 14px;
-  border-radius: 6px;
-  font-size: 12px;
-  cursor: pointer;
+  background: none; border: 1px solid var(--border); color: rgba(255,255,255,0.4);
+  padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer; font-family: inherit;
 }
-
 .modalConfirm {
-  background: rgba(240,192,64,0.15);
-  border: 1px solid rgba(240,192,64,0.3);
-  color: rgba(240,192,64,0.9);
-  padding: 6px 14px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
+  background: rgba(240,192,64,0.15); border: 1px solid rgba(240,192,64,0.3); color: rgba(240,192,64,0.9);
+  padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit;
 }
-
 .modalConfirm:disabled { opacity: 0.3; cursor: not-allowed; }
