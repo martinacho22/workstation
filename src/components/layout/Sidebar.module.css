@@ -1,7 +1,7 @@
 .sidebar {
   width: 220px;
   min-width: 220px;
-  height: 100vh;
+  height: 100%;           /* fills the post-header flex container */
   background: #0d0d14;
   border-right: 1px solid rgba(255,255,255,0.06);
   display: flex;
@@ -74,5 +74,15 @@
   color: var(--accent);
 }
 
-.icon { font-size: 16px; flex-shrink: 0; }
+/* Icon is now a short text abbreviation — consistent cross-platform */
+.icon {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: inherit;
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+}
+
 .label { font-size: 13px; }
