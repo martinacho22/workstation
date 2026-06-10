@@ -8,13 +8,13 @@ interface Props {
 }
 
 const NAV: { id: Screen; icon: string; label: string }[] = [
-  { id: 'dashboard', icon: '▦', label: 'Dashboard' },
-  { id: 'canvas',    icon: '◻', label: 'Canvas'    },
-  { id: 'warroom',   icon: '◈', label: 'War Room'  },
+  { id: 'dashboard', icon: 'DB', label: 'Dashboard' },
+  { id: 'canvas',    icon: 'CV', label: 'Canvas'    },
+  { id: 'warroom',   icon: 'WR', label: 'War Room'  },
 ]
 
 const BOTTOM: { id: Screen; icon: string; label: string }[] = [
-  { id: 'settings', icon: '⊙', label: 'Settings' },
+  { id: 'settings', icon: 'ST', label: 'Settings' },
 ]
 
 export default function Sidebar({ current, onChange, collapsed }: Props) {
@@ -33,7 +33,7 @@ export default function Sidebar({ current, onChange, collapsed }: Props) {
             key={item.id}
             className={`${styles.navItem} ${current === item.id ? styles.active : ''}`}
             onClick={() => onChange(item.id)}
-            title={collapsed ? item.label : undefined}
+            title={item.label}
           >
             <span className={styles.icon}>{item.icon}</span>
             {!collapsed && <span className={styles.label}>{item.label}</span>}
@@ -47,7 +47,7 @@ export default function Sidebar({ current, onChange, collapsed }: Props) {
             key={item.id}
             className={`${styles.navItem} ${current === item.id ? styles.active : ''}`}
             onClick={() => onChange(item.id)}
-            title={collapsed ? item.label : undefined}
+            title={item.label}
           >
             <span className={styles.icon}>{item.icon}</span>
             {!collapsed && <span className={styles.label}>{item.label}</span>}
