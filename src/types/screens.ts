@@ -1,1 +1,1 @@
-export type Screen = 'dashboard' | 'canvas' | 'warroom' | 'projects' | 'settings'
+export type Screen = 'dashboard' | 'canvas' | 'warroom' | 'settings'
