@@ -7,15 +7,25 @@ import { nanoid }                from 'nanoid'
 import styles from './FloatingChatCard.module.css'
 
 /**
- * FloatingChatCard
+ * FloatingChatCard — worker chat for a specific node.
  *
- * One instance per open chat session. Draggable, free-floating above canvas.
- * Minimised state: card hides entirely — SessionTray owns the pill UI.
- * Close: removes from store, pill disappears from tray.
+ * Visual identity:
+ *  - Blue accent (#7c9eff) — distinct from orchestrator green (#00ff88)
+ *  - Phase number badge instead of generic dot
+ *  - Status bar at top: node name · status · terminal activity
+ *  - Avatar is the phase number, not a generic symbol
  */
 
 interface Props {
   nodeId: string
+}
+
+// Format ms since timestamp as "Xm ago" / "just now" etc.
+function timeAgo(ts: number): string {
+  const diff = Date.now() - ts
+  if (diff < 60_000)  return 'just now'
+  if (diff < 3600_000) return `${Math.floor(diff / 60_000)}m ago`
+  return `${Math.floor(diff / 3600_000)}h ago`
 }
 
 export default function FloatingChatCard({ nodeId }: Props) {
@@ -28,6 +38,7 @@ export default function FloatingChatCard({ nodeId }: Props) {
   const [input, setInput]               = useState('')
   const [streaming, setStreaming]       = useState(false)
   const [streamBuffer, setStreamBuffer] = useState('')
+  const [terminalTs, setTerminalTs]     = useState<number | null>(null)
 
   // Drag
   const dragging   = useRef(false)
@@ -35,6 +46,21 @@ export default function FloatingChatCard({ nodeId }: Props) {
   const cardRef    = useRef<HTMLDivElement>(null)
   const bottomRef  = useRef<HTMLDivElement>(null)
   const inputRef   = useRef<HTMLTextAreaElement>(null)
+
+  // Phase order — position in blueprint
+  const phaseIndex = project?.blueprint
+    ? project.blueprint.findIndex(b => b.label === node?.data.label) + 1
+    : session?.order + 1 ?? 1
+
+  // Terminal activity — listen for terminal:activity events
+  useEffect(() => {
+    const electronAPI = (window as any).electron
+    if (!electronAPI?.on) return
+    const off = electronAPI.on?.(`terminal:activity:${nodeId}`, () => {
+      setTerminalTs(Date.now())
+    })
+    return () => off?.()
+  }, [nodeId])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -84,7 +110,7 @@ export default function FloatingChatCard({ nodeId }: Props) {
 
     const blueprint    = project?.blueprint?.find(b => b.label === node.data.label)
     const systemPrompt = [
-      `You are a senior developer planning companion for "${node.data.label}".`,
+      `You are a senior developer working on "${node.data.label}" (phase ${phaseIndex}).`,
       project ? `Project: ${project.name}. Stack: ${project.stack}.` : '',
       blueprint?.description ? `Goal: ${blueprint.description}` : '',
       node.data.handoffDoc
@@ -127,14 +153,20 @@ export default function FloatingChatCard({ nodeId }: Props) {
 
   // ── Guards ────────────────────────────────────────────────────────────────
 
-  // No session or node → render nothing
   if (!node || !session) return null
-
-  // Minimised → render nothing here; SessionTray owns the pill
-  if (session.minimised) return null
+  if (session.minimised)  return null
 
   const blueprint = project?.blueprint?.find(b => b.label === node.data.label)
   const pos       = session.pos
+  const hasTerminal = (node.data as any).terminalOpen ?? false
+
+  // Status label
+  const statusLabel = {
+    idle:    'idle',
+    active:  'active',
+    done:    'done',
+    blocked: 'blocked',
+  }[node.data.status] ?? 'idle'
 
   // ── Full card ─────────────────────────────────────────────────────────────
 
@@ -144,17 +176,33 @@ export default function FloatingChatCard({ nodeId }: Props) {
       style={{ left: pos.x, top: pos.y }}
       ref={cardRef}
     >
-      {/* Drag handle / header */}
+      {/* ── Status bar (top) — node identity ── */}
+      <div className={styles.statusBar}>
+        <div className={styles.statusLeft}>
+          <span className={styles.phaseNum}>{phaseIndex}</span>
+          <span className={styles.nodeName}>{node.data.label}</span>
+          <span className={`${styles.statusBadge} ${styles[`status_${node.data.status}`]}`}>
+            {statusLabel}
+          </span>
+        </div>
+        {(hasTerminal || terminalTs) && (
+          <div className={styles.terminalActivity}>
+            <span className={styles.terminalDot} />
+            <span className={styles.terminalLabel}>
+              {terminalTs ? `Session ${timeAgo(terminalTs)}` : 'Session open'}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* ── Drag handle / header ── */}
       <div className={styles.header} onMouseDown={onMouseDown}>
         <div className={styles.headerLeft}>
-          <span className={styles.accentDot} />
-          <span className={styles.headerTitle}>{node.data.label}</span>
-          {blueprint?.description && (
-            <span className={styles.headerDesc}>{blueprint.description}</span>
-          )}
+          <span className={styles.headerDesc}>
+            {blueprint?.description ?? 'Planning companion'}
+          </span>
         </div>
         <div className={styles.headerActions}>
-          {/* Minimise — hides card, pill appears in SessionTray */}
           <button
             className={styles.iconBtn}
             onClick={() => minimiseChat(nodeId)}
@@ -162,7 +210,6 @@ export default function FloatingChatCard({ nodeId }: Props) {
           >
             –
           </button>
-          {/* Close — ends session, removes from tray */}
           <button
             className={styles.iconBtnClose}
             onClick={() => closeChat(nodeId)}
@@ -173,11 +220,11 @@ export default function FloatingChatCard({ nodeId }: Props) {
         </div>
       </div>
 
-      {/* Messages */}
+      {/* ── Messages ── */}
       <div className={styles.messages}>
         {node.data.chatHistory.length === 0 && !streaming && (
           <div className={styles.empty}>
-            <div className={styles.emptyTitle}>{node.data.label}</div>
+            <div className={styles.emptyTitle}>Phase {phaseIndex} — {node.data.label}</div>
             <div className={styles.emptyHint}>
               {node.data.handoffDoc
                 ? `Continuing: ${node.data.handoffDoc.currentStatus}`
@@ -188,7 +235,9 @@ export default function FloatingChatCard({ nodeId }: Props) {
 
         {node.data.chatHistory.map(msg => (
           <div key={msg.id} className={`${styles.msg} ${styles[`msg_${msg.role}`]}`}>
-            <span className={styles.roleLabel}>{msg.role === 'user' ? 'You' : 'Claude'}</span>
+            <span className={styles.roleLabel}>
+              {msg.role === 'user' ? 'You' : `Claude · ph.${phaseIndex}`}
+            </span>
             <div className={styles.msgContent}>
               {msg.content.split('\n').map((line, i) => (
                 <p key={i} className={
@@ -204,7 +253,7 @@ export default function FloatingChatCard({ nodeId }: Props) {
 
         {streaming && (
           <div className={`${styles.msg} ${styles.msg_assistant}`}>
-            <span className={styles.roleLabel}>Claude</span>
+            <span className={styles.roleLabel}>Claude · ph.{phaseIndex}</span>
             {streamBuffer ? (
               <div className={styles.msgContent}>
                 <p className={styles.textLine}>
@@ -219,7 +268,7 @@ export default function FloatingChatCard({ nodeId }: Props) {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
+      {/* ── Input ── */}
       <div className={styles.inputArea}>
         <textarea
           ref={inputRef}
