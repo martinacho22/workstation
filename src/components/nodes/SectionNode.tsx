@@ -1,13 +1,14 @@
 import { memo, useState } from 'react'
 import { Handle, Position, NodeProps } from '@xyflow/react'
-import { WorkstationNodeData } from '@/types'
-import { useWorkstationStore } from '@/store/useWorkstationStore'
-import InlineTerminal from './InlineTerminal'
+import { WorkstationNodeData }         from '@/types'
+import { useWorkstationStore }         from '@/store/useWorkstationStore'
+import { useChatSessionsStore }        from '@/store/chatSessionsStore'
+import InlineTerminal                  from './InlineTerminal'
 import styles from './SectionNode.module.css'
 
 function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
-  const { updateNodeStatus, deleteNode, renameNode, nodes, activeNodeId, setActiveNode } =
-    useWorkstationStore()
+  const { updateNodeStatus, deleteNode, renameNode, nodes } = useWorkstationStore()
+  const { sessions, openChat, closeChat, toggleMinimise }   = useChatSessionsStore()
 
   const [renaming, setRenaming]             = useState(false)
   const [renameVal, setRenameVal]           = useState(data.label)
@@ -15,40 +16,48 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
   const [showBlockModal, setShowBlockModal] = useState(false)
   const [blockReason, setBlockReason]       = useState('')
   const [blockBy, setBlockBy]               = useState('')
-
-  // Terminal state — per node, lives on the canvas
   const [terminalOpen, setTerminalOpen]     = useState(false)
 
-  // isActive = this node is the active chat node (FloatingChatCard is open for it)
-  const isActive      = activeNodeId === id
-  // hasSession = this node has an open terminal (accent dot shown)
-  const hasSession    = terminalOpen
+  const session    = sessions[id]
+  const chatOpen   = !!session && !session.minimised
+  const chatExists = !!session
 
-  const sectionNodes  = nodes.filter(n => n.id !== id && (n.data.kind === 'section' || n.data.kind === 'overview'))
-  const messageCount  = data.chatHistory?.length ?? 0
-  const hasHandoff    = !!data.handoffDoc
-  const blueprint     = useWorkstationStore(s => s.project?.blueprint)
-  const sectionDesc   = blueprint?.find(b => b.label === data.label)?.description
+  // Blueprint order for tray positioning
+  const blueprint  = useWorkstationStore(s => s.project?.blueprint)
+  const bpIdx      = blueprint?.findIndex(b => b.label === data.label) ?? 0
+  const sectionDesc = blueprint?.find(b => b.label === data.label)?.description
+
+  const sectionNodes = nodes.filter(n => n.id !== id && (n.data.kind === 'section' || n.data.kind === 'overview'))
+  const messageCount = data.chatHistory?.length ?? 0
+  const hasHandoff   = !!data.handoffDoc
 
   function commitRename() {
     renameNode(id, renameVal)
     setRenaming(false)
   }
 
-  // Single click → open FloatingChatCard for this node
+  // Single click → open/toggle chat
   function handleClick(e: React.MouseEvent) {
     e.stopPropagation()
     if (showMenu) { setShowMenu(false); return }
-    // Toggle active chat node
-    setActiveNode(isActive ? null : id)
+
+    if (!chatExists) {
+      // Open fresh chat
+      openChat(id, bpIdx)
+    } else if (chatOpen) {
+      // Chat is open → minimise it
+      toggleMinimise(id)
+    } else {
+      // Chat is minimised → restore it
+      toggleMinimise(id)
+    }
   }
 
-  // Double click → open inline terminal
+  // Double click → open inline terminal (+ ensure chat exists)
   function handleDoubleClick(e: React.MouseEvent) {
     e.stopPropagation()
     setTerminalOpen(v => !v)
-    // Also mark as active so chat opens too
-    if (!isActive) setActiveNode(id)
+    if (!chatExists) openChat(id, bpIdx)
   }
 
   const statusColor =
@@ -75,7 +84,7 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
         className={[
           styles.node,
           selected  ? styles.selected  : '',
-          isActive  ? styles.active    : '',
+          chatOpen  ? styles.active    : '',
           data.status === 'done'    ? styles.done    : '',
           data.status === 'blocked' ? styles.blocked : '',
         ].join(' ')}
@@ -86,19 +95,18 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
         <Handle type="target" position={Position.Left}  className={styles.handle} />
         <Handle type="source" position={Position.Right} className={styles.handle} />
 
-        {/* Left status bar */}
+        {/* Status bar — left edge */}
         <div className={styles.statusBar} style={{ background: statusColor }} />
 
         {/* Session dot — shown above node when terminal is open */}
-        {hasSession && (
-          <div
-            className={styles.sessionDot}
-            title="Claude Code session open — double-click to toggle"
-          />
+        {terminalOpen && (
+          <div className={styles.sessionDot} title="Claude Code session open" />
         )}
 
+        {/* Chat-open indicator ring */}
+        {chatOpen && <div className={styles.chatRing} />}
+
         <div className={styles.body}>
-          {/* Label */}
           {renaming ? (
             <input
               className={styles.renameInput}
@@ -107,36 +115,25 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
               onChange={e => setRenameVal(e.target.value)}
               onBlur={commitRename}
               onKeyDown={e => {
-                if (e.key === 'Enter') commitRename()
+                if (e.key === 'Enter')  commitRename()
                 if (e.key === 'Escape') { setRenameVal(data.label); setRenaming(false) }
               }}
               onClick={e => e.stopPropagation()}
             />
           ) : (
-            <div
-              className={styles.label}
-              onDoubleClick={e => {
-                // Handled by node's onDoubleClick — don't rename on body dbl-click
-                e.stopPropagation()
-              }}
-            >
-              {data.label}
-            </div>
+            <div className={styles.label}>{data.label}</div>
           )}
 
-          {/* Description from blueprint */}
           {sectionDesc && (
             <div className={styles.desc}>{sectionDesc}</div>
           )}
 
-          {/* Blocked reason */}
           {data.status === 'blocked' && data.blockedReason && (
             <div className={styles.blockedBadge}>
               Blocked: {data.blockedReason.reason}
             </div>
           )}
 
-          {/* Footer meta */}
           <div className={styles.footer}>
             <span className={`${styles.statusLabel} ${styles[`status_${data.status}`]}`}>
               {data.status}
@@ -159,14 +156,11 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
           </div>
         </div>
 
-        {/* Hint bar at bottom — shows on hover */}
+        {/* Hint */}
         <div className={styles.hintBar}>
-          <span>click → chat</span>
+          <span>click → {chatExists ? (chatOpen ? 'minimise' : 'restore') : 'open'} chat</span>
           <span>dbl-click → terminal</span>
         </div>
-
-        {/* Active indicator strip */}
-        {isActive && <div className={styles.activeBar} />}
 
         {/* Context menu */}
         {showMenu && (
@@ -193,14 +187,19 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
             <button className={styles.menuItem} onClick={() => { setTerminalOpen(v => !v); setShowMenu(false) }}>
               {terminalOpen ? 'Close terminal' : 'Open terminal'}
             </button>
+            {chatExists && (
+              <button className={styles.menuItem} onClick={() => { closeChat(id); setShowMenu(false) }}>
+                Close chat
+              </button>
+            )}
             <div className={styles.menuDivider} />
-            <button className={`${styles.menuItem} ${styles.menuItemDanger}`} onClick={() => { deleteNode(id); setShowMenu(false) }}>
+            <button className={`${styles.menuItem} ${styles.menuItemDanger}`} onClick={() => { deleteNode(id); closeChat(id); setShowMenu(false) }}>
               Delete
             </button>
           </div>
         )}
 
-        {/* Inline terminal — spawns below node, stays on canvas */}
+        {/* Inline terminal */}
         {terminalOpen && (
           <InlineTerminal
             nodeId={id}
@@ -209,7 +208,7 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
         )}
       </div>
 
-      {/* Block modal — outside node div so it covers full screen */}
+      {/* Block modal */}
       {showBlockModal && (
         <div className={styles.modalBackdrop} onClick={() => setShowBlockModal(false)}>
           <div className={styles.modal} onClick={e => e.stopPropagation()}>
@@ -233,7 +232,7 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
               ))}
             </select>
             <div className={styles.modalActions}>
-              <button className={styles.modalCancel} onClick={() => setShowBlockModal(false)}>Cancel</button>
+              <button className={styles.modalCancel}  onClick={() => setShowBlockModal(false)}>Cancel</button>
               <button className={styles.modalConfirm} onClick={handleMarkBlocked} disabled={!blockReason.trim()}>
                 Mark blocked
               </button>
