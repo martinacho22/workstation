@@ -17,51 +17,62 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
   const [blockReason, setBlockReason]       = useState('')
   const [blockBy, setBlockBy]               = useState('')
   const [terminalOpen, setTerminalOpen]     = useState(false)
+  const [hintSeen, setHintSeen]             = useState(false)
 
   const session    = sessions[id]
   const chatOpen   = !!session && !session.minimised
   const chatExists = !!session
 
+  // Last message preview — shown when chat is open
+  const lastMsg = session?.messages?.length
+    ? session.messages[session.messages.length - 1]
+    : null
+  const lastMsgPreview = lastMsg
+    ? (lastMsg.content.length > 72
+        ? lastMsg.content.slice(0, 72) + '…'
+        : lastMsg.content)
+    : null
+
   // Blueprint order for tray positioning
-  const blueprint  = useWorkstationStore(s => s.project?.blueprint)
-  const bpIdx      = blueprint?.findIndex(b => b.label === data.label) ?? 0
+  const blueprint   = useWorkstationStore(s => s.project?.blueprint)
+  const bpIdx       = blueprint?.findIndex(b => b.label === data.label) ?? 0
   const sectionDesc = blueprint?.find(b => b.label === data.label)?.description
 
   const sectionNodes = nodes.filter(n => n.id !== id && (n.data.kind === 'section' || n.data.kind === 'overview'))
-  const messageCount = data.chatHistory?.length ?? 0
+  const messageCount = session?.messages?.length ?? data.chatHistory?.length ?? 0
   const hasHandoff   = !!data.handoffDoc
+
+  // Expanded = chat is open OR terminal is open
+  const expanded = chatOpen || terminalOpen
 
   function commitRename() {
     renameNode(id, renameVal)
     setRenaming(false)
   }
 
-  // Single click → open/toggle chat
   function handleClick(e: React.MouseEvent) {
     e.stopPropagation()
     if (showMenu) { setShowMenu(false); return }
+    setHintSeen(true)
 
     if (!chatExists) {
-      // Open fresh chat
       openChat(id, bpIdx)
     } else if (chatOpen) {
-      // Chat is open → minimise it
       toggleMinimise(id)
     } else {
-      // Chat is minimised → restore it
       toggleMinimise(id)
     }
   }
 
-  // Double click → open inline terminal (+ ensure chat exists)
   function handleDoubleClick(e: React.MouseEvent) {
     e.stopPropagation()
     setTerminalOpen(v => !v)
+    setHintSeen(true)
     if (!chatExists) openChat(id, bpIdx)
   }
 
   const statusColor =
-    data.status === 'done'    ? 'var(--done, #4ade80)' :
+    data.status === 'done'    ? '#4ade80' :
     data.status === 'blocked' ? '#f0c040' :
     data.status === 'active'  ? 'var(--accent)' :
     'rgba(255,255,255,0.12)'
@@ -85,6 +96,7 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
           styles.node,
           selected  ? styles.selected  : '',
           chatOpen  ? styles.active    : '',
+          expanded  ? styles.expanded  : '',
           data.status === 'done'    ? styles.done    : '',
           data.status === 'blocked' ? styles.blocked : '',
         ].join(' ')}
@@ -98,12 +110,12 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
         {/* Status bar — left edge */}
         <div className={styles.statusBar} style={{ background: statusColor }} />
 
-        {/* Session dot — shown above node when terminal is open */}
+        {/* Session dot — pulsing green when terminal open */}
         {terminalOpen && (
           <div className={styles.sessionDot} title="Claude Code session open" />
         )}
 
-        {/* Chat-open indicator ring */}
+        {/* Blue ring when chat is open */}
         {chatOpen && <div className={styles.chatRing} />}
 
         <div className={styles.body}>
@@ -124,13 +136,46 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
             <div className={styles.label}>{data.label}</div>
           )}
 
+          {/* Description — always shown, one line */}
           {sectionDesc && (
             <div className={styles.desc}>{sectionDesc}</div>
           )}
 
+          {/* Blocked reason */}
           {data.status === 'blocked' && data.blockedReason && (
             <div className={styles.blockedBadge}>
-              Blocked: {data.blockedReason.reason}
+              ⚠ {data.blockedReason.reason}
+            </div>
+          )}
+
+          {/* ── Expanded content — shown when chat is open ── */}
+          {expanded && (
+            <div className={styles.expandedSection}>
+              {/* Last chat message preview */}
+              {lastMsgPreview && (
+                <div className={styles.lastMsgPreview}>
+                  <span className={styles.lastMsgRole}>
+                    {lastMsg?.role === 'user' ? 'you' : '◈'}
+                  </span>
+                  <span className={styles.lastMsgText}>{lastMsgPreview}</span>
+                </div>
+              )}
+
+              {/* Launch terminal button — visible when expanded, not just on hover */}
+              <button
+                className={styles.launchTerminalBtn}
+                onClick={e => { e.stopPropagation(); setTerminalOpen(v => !v) }}
+              >
+                {terminalOpen ? '⌘ Close terminal' : '⌘ Launch Claude Code'}
+              </button>
+
+              {/* Terminal active indicator */}
+              {terminalOpen && (
+                <div className={styles.terminalActiveBadge}>
+                  <span className={styles.terminalDot} />
+                  Session active
+                </div>
+              )}
             </div>
           )}
 
@@ -147,20 +192,17 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
                   handoff
                 </span>
               )}
-              {terminalOpen && (
-                <span className={styles.metaChip} style={{ color: 'var(--accent)', borderColor: 'rgba(0,255,136,0.35)', background: 'rgba(0,255,136,0.06)' }}>
-                  ⌘ live
-                </span>
-              )}
             </div>
           </div>
         </div>
 
-        {/* Hint */}
-        <div className={styles.hintBar}>
-          <span>click → {chatExists ? (chatOpen ? 'minimise' : 'restore') : 'open'} chat</span>
-          <span>dbl-click → terminal</span>
-        </div>
+        {/* Hint — only shown on hover, fades after first use */}
+        {!hintSeen && (
+          <div className={styles.hintBar}>
+            <span>click → chat</span>
+            <span>dbl-click → terminal</span>
+          </div>
+        )}
 
         {/* Context menu */}
         {showMenu && (
