@@ -17,9 +17,10 @@ function createWindow() {
     height: 1000,
     minWidth: 1200,
     minHeight: 700,
-    backgroundColor: '#0a0a0f',
+    backgroundColor: '#08080e',
     titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 16, y: 16 },
+    // Centred vertically in the 40px ElectronHeader
+    trafficLightPosition: { x: 16, y: 12 },
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -43,7 +44,6 @@ function createWindow() {
 app.whenReady().then(() => {
   createWindow()
 
-  // Register Claude CLI bridge IPC handlers
   registerClaudeBridgeHandlers()
 
   app.on('activate', () => {
@@ -110,7 +110,7 @@ ipcMain.handle('claude:set-path', (event, { path: p }) => {
   return { success: true }
 })
 
-// ─── Folder picker (for project import) ──────────────────────────────────────
+// ─── Folder picker ────────────────────────────────────────────────────────────
 
 ipcMain.handle('dialog:openFolder', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
