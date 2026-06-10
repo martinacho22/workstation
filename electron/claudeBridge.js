@@ -2,6 +2,14 @@
  * claudeBridge.js
  * Spawns `claude -p "prompt"` via child_process and streams stdout back
  * to the renderer via IPC. No API key needed — uses the user's subscription.
+ *
+ * FIX LOG:
+ *  1. Removed --stream flag from streamClaude() — claude CLI does not support it,
+ *     it caused immediate exit with "unrecognised argument" on every chat message.
+ *  2. Removed --system-prompt flag from both runClaude() and streamClaude() —
+ *     not a real claude -p flag; prepend system context to the prompt itself instead.
+ *  3. Fixed CLAUDE_CODE_OAUTH_TOKEN: undefined — setting a key to undefined in a
+ *     Node env object passes the string "undefined" on some platforms. Use delete instead.
  */
 
 const { spawn, execSync } = require('child_process')
@@ -18,6 +26,15 @@ function setClaudePath(p) {
 }
 
 /**
+ * Build the full prompt string by prepending system context to the user prompt.
+ * This replaces the invalid --system-prompt flag.
+ */
+function buildPrompt(prompt, systemPrompt) {
+  if (!systemPrompt) return prompt
+  return `${systemPrompt}\n\n---\n\n${prompt}`
+}
+
+/**
  * Run a one-shot claude prompt and return the full response as a string.
  */
 function runClaude(prompt, opts = {}) {
@@ -30,11 +47,12 @@ function runClaude(prompt, opts = {}) {
       timeout = 60000,
     } = opts
 
-    const args = ['-p', prompt]
+    const fullPrompt = buildPrompt(prompt, systemPrompt)
+    const args = ['-p', fullPrompt]
     if (skipPermissions) args.push('--dangerously-skip-permissions')
     if (continueSession) args.push('--continue')
     if (sessionId) { args.push('--resume'); args.push(sessionId) }
-    if (systemPrompt) { args.push('--system-prompt', systemPrompt) }
+    // NOTE: --system-prompt is NOT a valid claude CLI flag — removed.
 
     const proc = spawn(claudePath, args, {
       env: { ...process.env },
@@ -79,6 +97,9 @@ function runClaude(prompt, opts = {}) {
 
 /**
  * Stream a claude prompt — calls progressCb with each chunk of stdout.
+ *
+ * NOTE: --stream is NOT a valid claude -p flag. Streaming is achieved by
+ * reading stdout chunks as they arrive from the subprocess — no flag needed.
  */
 function streamClaude(prompt, progressCb, opts = {}) {
   return new Promise((resolve, reject) => {
@@ -90,11 +111,12 @@ function streamClaude(prompt, progressCb, opts = {}) {
       timeout = 120000,
     } = opts
 
-    const args = ['-p', prompt, '--stream']
+    const fullPrompt = buildPrompt(prompt, systemPrompt)
+    // NOTE: --stream removed — it is not a valid flag and causes immediate CLI failure.
+    const args = ['-p', fullPrompt]
     if (skipPermissions) args.push('--dangerously-skip-permissions')
     if (continueSession) args.push('--continue')
     if (sessionId) { args.push('--resume'); args.push(sessionId) }
-    if (systemPrompt) args.push('--system-prompt', systemPrompt)
 
     const proc = spawn(claudePath, args, {
       env: { ...process.env },
@@ -114,6 +136,7 @@ function streamClaude(prompt, progressCb, opts = {}) {
     proc.stdout.on('data', (data) => {
       const chunk = data.toString()
       fullOutput += chunk
+      // Stream each chunk to the renderer as it arrives
       if (progressCb) progressCb(chunk)
     })
 
@@ -131,14 +154,19 @@ function streamClaude(prompt, progressCb, opts = {}) {
 
     proc.on('error', (err) => {
       clearTimeout(timer)
-      reject(err)
+      if (err.code === 'ENOENT') {
+        reject(new Error(
+          'Claude CLI not found.\nInstall: npm install -g @anthropic-ai/claude-code\nThen authenticate: claude'
+        ))
+      } else {
+        reject(err)
+      }
     })
   })
 }
 
 /**
  * REAL auth check — runs `claude -p "hi" --output-format json`
- * --max-tokens is NOT a valid CLI flag. This is the correct approach.
  * Returns { installed, authenticated, version, path, error }
  */
 function checkClaudeStatus() {
@@ -181,15 +209,16 @@ function checkClaudeStatus() {
       } catch (_) {}
 
       // Step 3: Real auth check — run a minimal prompt
-      // We use --output-format json so we can detect auth errors cleanly
-      const authProc = spawn(claudePath, ['-p', 'respond with the word ok', '--output-format', 'json'], {
-        shell: false,
-        env: {
-          ...process.env,
-          // Unset any injected token that might be conflicting (Claude Desktop conflict)
-          CLAUDE_CODE_OAUTH_TOKEN: undefined,
-        },
-      })
+      // FIX: delete CLAUDE_CODE_OAUTH_TOKEN instead of setting to undefined.
+      // Setting to undefined passes the string "undefined" on some platforms.
+      const authEnv = { ...process.env }
+      delete authEnv.CLAUDE_CODE_OAUTH_TOKEN
+
+      const authProc = spawn(
+        claudePath,
+        ['-p', 'respond with the word ok', '--output-format', 'json'],
+        { shell: false, env: authEnv }
+      )
 
       let authOut = ''
       let authErr = ''
@@ -211,7 +240,7 @@ function checkClaudeStatus() {
           let error = 'NOT_AUTHENTICATED'
 
           if (combined.includes('oauth') || combined.includes('token')) {
-            error = 'TOKEN_CONFLICT' // Claude Desktop conflict
+            error = 'TOKEN_CONFLICT'
           } else if (combined.includes('network') || combined.includes('connect')) {
             error = 'NETWORK_ERROR'
           }
@@ -240,7 +269,6 @@ function checkClaudeStatus() {
  */
 function attemptAuthFix() {
   return new Promise((resolve) => {
-    // Clear the cache directory
     const cacheDir = path.join(os.homedir(), '.claude', 'cache')
     try {
       if (fs.existsSync(cacheDir)) {
@@ -248,7 +276,6 @@ function attemptAuthFix() {
       }
     } catch (_) {}
 
-    // Run claude /logout then signal the renderer to open a terminal for re-auth
     const logoutProc = spawn(claudePath, ['/logout'], { shell: false })
 
     logoutProc.on('close', () => {
