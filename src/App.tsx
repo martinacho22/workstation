@@ -12,29 +12,24 @@ import {
 import '@xyflow/react/dist/style.css'
 
 import { useWorkstationStore } from '@/store/useWorkstationStore'
-import SectionNode       from '@/components/nodes/SectionNode'
-import OverviewNode      from '@/components/nodes/OverviewNode'
-import NodeWorkspace     from '@/components/nodes/NodeWorkspace'
-import { FlowEdge }      from '@/components/edges'
-import Toolbar           from '@/components/canvas/Toolbar'
-import ProjectSetup      from '@/components/canvas/ProjectSetup'
-import OrchestratorPanel from '@/components/orchestrator/OrchestratorPanel'
-import Sidebar           from '@/components/layout/Sidebar'
-import ElectronHeader    from '@/components/layout/ElectronHeader'
-import Dashboard         from '@/screens/Dashboard'
-import WarRoom           from '@/screens/WarRoom'
-import Settings          from '@/screens/Settings'
-import Setup             from '@/screens/Setup'
+import SectionNode          from '@/components/nodes/SectionNode'
+import OverviewNode         from '@/components/nodes/OverviewNode'
+import { FlowEdge }         from '@/components/edges'
+import FloatingChatCard     from '@/components/canvas/FloatingChatCard'
+import Toolbar              from '@/components/canvas/Toolbar'
+import ProjectSetup         from '@/components/canvas/ProjectSetup'
+import OrchestratorPanel    from '@/components/orchestrator/OrchestratorPanel'
+import Sidebar              from '@/components/layout/Sidebar'
+import ElectronHeader       from '@/components/layout/ElectronHeader'
+import Dashboard            from '@/screens/Dashboard'
+import WarRoom              from '@/screens/WarRoom'
+import Settings             from '@/screens/Settings'
+import Setup                from '@/screens/Setup'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const HEADER_H       = 40
 const SETUP_DONE_KEY = 'workstation_setup_complete'
-
-// When workspace is open, canvas takes this % of the canvas column height
-// Workspace gets the rest.
-const CANVAS_SPLIT_PCT  = 42   // canvas: 42%
-const WORKSPACE_MIN_PX  = 320  // never shorter than this
 
 const nodeTypes: NodeTypes = {
   sectionNode:  SectionNode,
@@ -94,8 +89,6 @@ export default function App() {
     )
   }
 
-  const workspaceOpen = !!activeNodeId && screen === 'canvas'
-
   return (
     <>
       {/* ── Persistent titlebar ── */}
@@ -139,15 +132,15 @@ export default function App() {
           {/* Settings */}
           {screen === 'settings' && <Settings />}
 
-          {/* Canvas */}
+          {/* Canvas — always full height, no splitting */}
           {screen === 'canvas' && (
             <>
               {showSetup && !project ? (
                 <ProjectSetup onDone={() => setShowSetup(false)} />
               ) : (
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%' }}>
 
-                  {/* Toolbar — fixed above canvas, not inside ReactFlow */}
+                  {/* Toolbar — fixed above canvas */}
                   <div style={{
                     flexShrink:     0,
                     borderBottom:   '1px solid rgba(255,255,255,0.06)',
@@ -157,99 +150,85 @@ export default function App() {
                     <Toolbar onNewProject={() => setShowSetup(true)} />
                   </div>
 
-                  {/* Canvas + workspace split */}
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
-
-                    {/* Canvas — shrinks when workspace is open */}
-                    <div style={{
-                      flex:       workspaceOpen ? `0 0 ${CANVAS_SPLIT_PCT}%` : '1',
-                      minHeight:  workspaceOpen ? 120 : undefined,
-                      position:   'relative',
-                      transition: 'flex 0.2s ease',
-                      overflow:   'hidden',
-                    }}>
-                      <ReactFlow
-                        nodes={nodes}
-                        edges={edges}
-                        onNodesChange={onNodesChange}
-                        onEdgesChange={onEdgesChange}
-                        onConnect={onConnect}
-                        nodeTypes={nodeTypes}
-                        edgeTypes={edgeTypes}
-                        connectionMode={ConnectionMode.Loose}
-                        fitView
-                        fitViewOptions={{ padding: 0.35 }}
-                        minZoom={0.15}
-                        maxZoom={2}
-                        proOptions={{ hideAttribution: true }}
-                        style={{ background: 'transparent' }}
-                        onPaneClick={() => setActiveNode(null)}
-                      >
-                        <Background
-                          variant={BackgroundVariant.Dots}
-                          gap={28}
-                          size={1}
-                          color="rgba(255,255,255,0.04)"
-                        />
-                        <Controls style={{
-                          background:   'var(--surface, rgba(255,255,255,0.05))',
-                          border:       '1px solid var(--border, rgba(255,255,255,0.08))',
+                  {/* Canvas — full remaining height */}
+                  <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+                    <ReactFlow
+                      nodes={nodes}
+                      edges={edges}
+                      onNodesChange={onNodesChange}
+                      onEdgesChange={onEdgesChange}
+                      onConnect={onConnect}
+                      nodeTypes={nodeTypes}
+                      edgeTypes={edgeTypes}
+                      connectionMode={ConnectionMode.Loose}
+                      fitView
+                      fitViewOptions={{ padding: 0.35 }}
+                      minZoom={0.15}
+                      maxZoom={2}
+                      proOptions={{ hideAttribution: true }}
+                      style={{ background: 'transparent' }}
+                      onPaneClick={() => setActiveNode(null)}
+                    >
+                      <Background
+                        variant={BackgroundVariant.Dots}
+                        gap={28}
+                        size={1}
+                        color="rgba(255,255,255,0.04)"
+                      />
+                      <Controls style={{
+                        background:   'var(--surface, rgba(255,255,255,0.05))',
+                        border:       '1px solid var(--border, rgba(255,255,255,0.08))',
+                        borderRadius: 8,
+                      }} />
+                      <MiniMap
+                        style={{
+                          background:   'var(--surface, rgba(255,255,255,0.03))',
+                          border:       '1px solid var(--border, rgba(255,255,255,0.06))',
                           borderRadius: 8,
-                        }} />
-                        {!workspaceOpen && (
-                          <MiniMap
-                            style={{
-                              background:   'var(--surface, rgba(255,255,255,0.03))',
-                              border:       '1px solid var(--border, rgba(255,255,255,0.06))',
-                              borderRadius: 8,
-                            }}
-                            nodeColor={(n) => {
-                              if (n.data?.status === 'done')     return 'rgba(74,222,128,0.6)'
-                              if (n.data?.status === 'blocked')  return 'rgba(240,192,64,0.6)'
-                              if (n.data?.status === 'active')   return 'rgba(0,255,136,0.6)'
-                              if (n.data?.kind   === 'overview') return 'var(--accent, #00ff88)'
-                              return 'rgba(255,255,255,0.08)'
-                            }}
-                            maskColor="rgba(10,10,15,0.7)"
-                          />
-                        )}
+                        }}
+                        nodeColor={(n) => {
+                          if (n.data?.status === 'done')     return 'rgba(74,222,128,0.6)'
+                          if (n.data?.status === 'blocked')  return 'rgba(240,192,64,0.6)'
+                          if (n.data?.status === 'active')   return 'rgba(0,255,136,0.6)'
+                          if (n.data?.kind   === 'overview') return 'var(--accent, #00ff88)'
+                          return 'rgba(255,255,255,0.08)'
+                        }}
+                        maskColor="rgba(10,10,15,0.7)"
+                      />
 
-                        {/* Empty canvas prompt */}
-                        {!project && (
-                          <div style={{
-                            position:   'absolute',
-                            top:        '50%',
-                            left:       '50%',
-                            transform:  'translate(-50%,-50%)',
-                            textAlign:  'center',
-                            color:      'rgba(255,255,255,0.18)',
-                            fontSize:   13,
-                            lineHeight: 1.6,
-                            pointerEvents: 'none',
-                          }}>
-                            <div style={{ fontSize: 26, marginBottom: 8, opacity: 0.2 }}>⬡</div>
-                            <div style={{ fontWeight: 600, marginBottom: 4 }}>No project open</div>
-                            <div style={{ fontSize: 12, opacity: 0.7 }}>
-                              Describe your idea in the Orchestrator panel →
-                            </div>
+                      {/* Empty canvas prompt */}
+                      {!project && (
+                        <div style={{
+                          position:      'absolute',
+                          top:           '50%',
+                          left:          '50%',
+                          transform:     'translate(-50%,-50%)',
+                          textAlign:     'center',
+                          color:         'rgba(255,255,255,0.18)',
+                          fontSize:      13,
+                          lineHeight:    1.6,
+                          pointerEvents: 'none',
+                        }}>
+                          <div style={{ fontSize: 26, marginBottom: 8, opacity: 0.2 }}>⬡</div>
+                          <div style={{ fontWeight: 600, marginBottom: 4 }}>No project open</div>
+                          <div style={{ fontSize: 12, opacity: 0.7 }}>
+                            Describe your idea in the Orchestrator panel →
                           </div>
-                        )}
-                      </ReactFlow>
-                    </div>
+                        </div>
+                      )}
+                    </ReactFlow>
 
-                    {/* NodeWorkspace — inline panel below canvas */}
-                    {workspaceOpen && (
-                      <div style={{
-                        flex:       `1 1 ${100 - CANVAS_SPLIT_PCT}%`,
-                        minHeight:  WORKSPACE_MIN_PX,
-                        overflow:   'hidden',
-                        display:    'flex',
-                        flexDirection: 'column',
-                      }}>
-                        <NodeWorkspace />
-                      </div>
+                    {/* FloatingChatCard — fixed overlay, one layer above canvas
+                        Renders when a node is active. Minimises to a pill.
+                        Clicking a different node → previous card closes,
+                        new card opens (handled by setActiveNode in SectionNode). */}
+                    {activeNodeId && (
+                      <FloatingChatCard
+                        key={activeNodeId}
+                        nodeId={activeNodeId}
+                        onClose={() => setActiveNode(null)}
+                      />
                     )}
-
                   </div>
                 </div>
               )}
