@@ -1,48 +1,88 @@
 .sidebar {
   width: 220px;
   min-width: 220px;
-  height: 100%;           /* fills the post-header flex container */
-  background: #0d0d14;
+  height: 100%;
+  background: #0a0a12;
   border-right: 1px solid rgba(255,255,255,0.06);
   display: flex;
   flex-direction: column;
-  transition: width 0.2s ease, min-width 0.2s ease;
   z-index: 100;
   flex-shrink: 0;
-}
-
-.sidebar.collapsed {
-  width: 56px;
-  min-width: 56px;
+  overflow: hidden;
 }
 
 .logo {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 20px 16px 16px;
+  padding: 18px 16px 14px;
   border-bottom: 1px solid rgba(255,255,255,0.04);
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--accent);
   white-space: nowrap;
   overflow: hidden;
+  flex-shrink: 0;
+}
+.logoIcon { font-size: 18px; color: var(--accent); }
+.logoText  { font-size: 14px; font-weight: 700; letter-spacing: 0.04em; color: rgba(255,255,255,0.85); }
+
+/* ── Project chip ── */
+.projectChip {
+  margin: 10px 10px 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(0,255,136,0.04);
+  border: 1px solid rgba(0,255,136,0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+.projectName {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(0,255,136,0.85);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.02em;
+}
+.projectDirBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  min-width: 0;
+}
+.projectDirText {
+  font-size: 10px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: rgba(255,255,255,0.25);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+.projectDirIcon {
+  font-size: 10px;
+  color: rgba(255,255,255,0.2);
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+.projectDirBtn:hover .projectDirText,
+.projectDirBtn:hover .projectDirIcon {
+  color: rgba(0,255,136,0.5);
 }
 
-.logoIcon { font-size: 20px; }
-.logoText { font-size: 15px; letter-spacing: 0.04em; color: #fff; }
-
+/* ── Nav ── */
 .nav {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 12px 8px;
-}
-
-.bottom {
-  padding: 12px 8px;
-  border-top: 1px solid rgba(255,255,255,0.04);
+  padding: 10px 8px;
 }
 
 .navItem {
@@ -51,11 +91,11 @@
   gap: 10px;
   width: 100%;
   padding: 9px 10px;
-  border-radius: 8px;
+  border-radius: 7px;
   background: transparent;
   border: none;
   cursor: pointer;
-  color: rgba(255,255,255,0.45);
+  color: rgba(255,255,255,0.42);
   font-size: 13px;
   font-weight: 500;
   transition: background 0.15s, color 0.15s;
@@ -63,26 +103,21 @@
   overflow: hidden;
   text-align: left;
 }
+.navItem:hover { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.8); }
+.navItem.active { background: rgba(0,255,136,0.08); color: var(--accent); }
 
-.navItem:hover {
-  background: rgba(255,255,255,0.05);
-  color: rgba(255,255,255,0.85);
-}
-
-.navItem.active {
-  background: rgba(0,255,136,0.08);
-  color: var(--accent);
-}
-
-/* Icon is now a short text abbreviation — consistent cross-platform */
-.icon {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: inherit;
-  flex-shrink: 0;
-  width: 20px;
-  text-align: center;
-}
-
+.icon  { font-size: 15px; color: inherit; flex-shrink: 0; width: 20px; text-align: center; }
 .label { font-size: 13px; }
+
+/* ── Bottom ── */
+.bottom {
+  padding: 10px 16px;
+  border-top: 1px solid rgba(255,255,255,0.04);
+  flex-shrink: 0;
+}
+.version {
+  font-size: 10px;
+  color: rgba(255,255,255,0.15);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
