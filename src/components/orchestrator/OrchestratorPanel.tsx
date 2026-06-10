@@ -16,70 +16,48 @@ interface OrchestratorMessage {
   isSystem?: boolean
 }
 
-// ─── Roadmap Section ──────────────────────────────────────────────────────────
+// ─── Pill Rail — compact roadmap strip shown after blueprint exists ───────────
 
-function RoadmapSection() {
+function PillRail() {
   const { nodes, project, setActiveNode, activeNodeId } = useWorkstationStore()
   const sections = nodes.filter(n => n.data.kind === 'section')
-  const total    = sections.length
-  const done     = sections.filter(n => n.data.status === 'done').length
-  const active   = sections.filter(n => n.data.status === 'active').length
-  const blocked  = sections.filter(n => n.data.status === 'blocked').length
 
-  if (!project || total === 0) {
-    return (
-      <div className={styles.roadmapEmpty}>
-        <span className={styles.roadmapEmptyText}>
-          Describe your project below — phases appear here automatically
-        </span>
-      </div>
-    )
-  }
+  if (!project || sections.length === 0) return null
+
+  const done    = sections.filter(n => n.data.status === 'done').length
+  const total   = sections.length
 
   return (
-    <div className={styles.roadmap}>
-      <div className={styles.roadmapHeader}>
-        <div className={styles.roadmapBar}>
-          <div
-            className={styles.roadmapFill}
-            style={{ width: total > 0 ? `${Math.round((done / total) * 100)}%` : '0%' }}
-          />
-        </div>
-        <div className={styles.roadmapStats}>
-          <span className={styles.statDone}>{done} done</span>
-          {active  > 0 && <span className={styles.statActive}>{active} active</span>}
-          {blocked > 0 && <span className={styles.statBlocked}>{blocked} blocked</span>}
-          <span className={styles.statTotal}>{total} total</span>
-        </div>
+    <div className={styles.pillRail}>
+      {/* Progress bar — ultra thin */}
+      <div className={styles.pillProgress}>
+        <div
+          className={styles.pillProgressFill}
+          style={{ width: total > 0 ? `${Math.round((done / total) * 100)}%` : '0%' }}
+        />
       </div>
 
-      <div className={styles.phases}>
+      {/* Phase pills */}
+      <div className={styles.pillList}>
         {sections.map((node, i) => {
-          const bp        = project?.blueprint?.find(b => b.label === node.data.label)
+          const bp       = project?.blueprint?.find(b => b.label === node.data.label)
           const isCurrent = node.id === activeNodeId
           return (
-            <div
+            <button
               key={node.id}
               className={[
-                styles.phase,
-                styles[`phase_${node.data.status}`],
-                isCurrent ? styles.phaseCurrent : '',
+                styles.pill,
+                styles[`pill_${node.data.status}`],
+                isCurrent ? styles.pillCurrent : '',
               ].join(' ')}
               onClick={() => setActiveNode(isCurrent ? null : node.id)}
               title={bp?.description ?? node.data.label}
             >
-              <div className={styles.phaseLeft}>
-                <span className={styles.phaseIndex}>{i + 1}</span>
-                <span className={styles.phaseDot} data-status={node.data.status} />
-              </div>
-              <div className={styles.phaseBody}>
-                <span className={styles.phaseLabel}>{node.data.label}</span>
-                {bp?.description && (
-                  <span className={styles.phaseDesc}>{bp.description}</span>
-                )}
-              </div>
-              <span className={styles.phaseStatus}>{node.data.status}</span>
-            </div>
+              <span className={styles.pillDot} data-status={node.data.status} />
+              <span className={styles.pillLabel}>
+                {i + 1}. {node.data.label.length > 10 ? node.data.label.slice(0, 10) + '…' : node.data.label}
+              </span>
+            </button>
           )
         })}
       </div>
@@ -148,7 +126,7 @@ const PHASE_LABELS: Record<string, string> = {
   done:         '',
 }
 
-function OrchestratorChat() {
+function OrchestratorChat({ hasBlueprint }: { hasBlueprint: boolean }) {
   const store = useWorkstationStore()
   const {
     project, nodes,
@@ -165,7 +143,7 @@ function OrchestratorChat() {
     role:      'assistant',
     content:   project
       ? `"${project.name}" is open. ${sectionCount > 0 ? `${sectionCount} phases on the canvas.` : 'No phases yet — what are we building first?'}`
-      : "Describe what you want to build. I'll plan it, ask a few questions, then lay the phases on the canvas automatically.",
+      : "Describe what you want to build. I'll ask a few questions, then lay the phases on the canvas automatically.",
     timestamp: Date.now(),
   }])
 
@@ -211,7 +189,7 @@ function OrchestratorChat() {
     })
   }, [blueprintPhase, blueprintLoading])
 
-  // Blueprint done — show critique and confirm
+  // Blueprint done
   useEffect(() => {
     if (!blueprintLoading && blueprintPhase === 'done' && sectionCount > 0 && phase === 'grilling') {
       setPhase('chat')
@@ -241,13 +219,11 @@ function OrchestratorChat() {
       id: nanoid(6), role: 'user', content: text, timestamp: Date.now(),
     }])
 
-    // ── Grill Me phase ────────────────────────────────────────────────────
     if (phase === 'grilling') {
       await answerGrill(text)
       return
     }
 
-    // ── General orchestrator chat ─────────────────────────────────────────
     setLoading(true)
     try {
       const ctx            = store.buildProjectContext()
@@ -277,7 +253,6 @@ Developer: ${text}`
         timestamp: Date.now(),
       }])
 
-      // If no project yet → auto start grill flow
       if (!project && commands.length === 0) {
         setPhase('grilling')
         await startGrill(text)
@@ -308,11 +283,7 @@ Developer: ${text}`
 
   return (
     <div className={styles.chat}>
-
-      {/* ── Architect identity bar ──
-          Green ◈ + "Architect" label — makes it instantly clear this is
-          the project-level planner, NOT the worker chat (which is blue).
-      ── */}
+      {/* Identity bar */}
       <div className={styles.chatIdentityBar}>
         <div className={styles.chatIdentityAvatar}>◈</div>
         <span className={styles.chatIdentityLabel}>Architect</span>
@@ -391,12 +362,23 @@ interface Props {
 }
 
 export default function OrchestratorPanel({ showChat = true }: Props) {
+  const { nodes, project } = useWorkstationStore()
+  const hasBlueprint = nodes.filter(n => n.data.kind === 'section').length > 0
+
+  // Before blueprint: full panel is chat only
+  // After blueprint: pill rail on top, tasks+chat below
+  if (!hasBlueprint) {
+    return (
+      <div className={styles.panel}>
+        {showChat && <OrchestratorChat hasBlueprint={false} />}
+      </div>
+    )
+  }
+
   return (
     <div className={styles.panel}>
-      <div className={styles.roadmapZone}>
-        <div className={styles.zoneLabel}>Roadmap</div>
-        <RoadmapSection />
-      </div>
+      {/* Compact pill rail — 32px, replaces the old roadmap zone */}
+      <PillRail />
 
       <div className={styles.bottomZone}>
         <div className={showChat ? styles.tasksZone : styles.tasksZoneFull}>
@@ -406,7 +388,7 @@ export default function OrchestratorPanel({ showChat = true }: Props) {
 
         {showChat && (
           <div className={styles.chatZone}>
-            <OrchestratorChat />
+            <OrchestratorChat hasBlueprint={true} />
           </div>
         )}
       </div>
