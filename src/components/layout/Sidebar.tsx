@@ -7,12 +7,10 @@ interface Props {
   collapsed: boolean
 }
 
-// Clean geometric symbols — no emojis
 const NAV: { id: Screen; icon: string; label: string }[] = [
-  { id: 'dashboard', icon: '▦',  label: 'Dashboard' },
-  { id: 'canvas',    icon: '◻',  label: 'Canvas'    },
-  { id: 'warroom',   icon: '◈',  label: 'War Room'  },
-  { id: 'projects',  icon: '▤',  label: 'Projects'  },
+  { id: 'dashboard', icon: '▦', label: 'Dashboard' },
+  { id: 'canvas',    icon: '◻', label: 'Canvas'    },
+  { id: 'warroom',   icon: '◈', label: 'War Room'  },
 ]
 
 const BOTTOM: { id: Screen; icon: string; label: string }[] = [
@@ -22,7 +20,6 @@ const BOTTOM: { id: Screen; icon: string; label: string }[] = [
 export default function Sidebar({ current, onChange, collapsed }: Props) {
   return (
     <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''}`}>
-      {/* Logo */}
       <div className={styles.logo}>
         {collapsed
           ? <span className={styles.logoIcon}>W</span>
