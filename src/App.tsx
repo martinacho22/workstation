@@ -133,8 +133,8 @@ export default function App() {
     <>
       {/* ── Persistent titlebar ── */}
       <ElectronHeader />
-      {/* Nav lives in the header stripe — rendered inside ElectronHeader's
-          right zone — but we overlay it here above everything */}
+
+      {/* Nav overlay — top right */}
       <NavBar screen={screen} onChange={(s) => {
         if (s !== 'canvas') setActiveNode(null)
         setScreen(s)
@@ -149,9 +149,6 @@ export default function App() {
         overflow: 'hidden',
         background: 'var(--bg, #0d0d14)',
       }}>
-
-        {/* ── Orchestrator Panel — always visible on canvas ── */}
-        {screen === 'canvas' && <OrchestratorPanel />}
 
         {/* ── Dashboard ── */}
         {screen === 'dashboard' && (
@@ -169,7 +166,7 @@ export default function App() {
           />
         )}
 
-        {/* ── Canvas + Session ── */}
+        {/* ── Canvas + Session — LEFT side takes all remaining space ── */}
         {screen === 'canvas' && (
           <div style={{ flex: 1, height: '100%', position: 'relative', overflow: 'hidden' }}>
 
@@ -246,11 +243,15 @@ export default function App() {
           </div>
         )}
 
+        {/* ── Orchestrator Panel — RIGHT side, canvas only ── */}
+        {screen === 'canvas' && <OrchestratorPanel />}
+
         {/* ── War Room ── */}
         {screen === 'warroom' && <WarRoom />}
 
         {/* ── Settings ── */}
         {screen === 'settings' && <Settings />}
+
       </div>
     </>
   )
