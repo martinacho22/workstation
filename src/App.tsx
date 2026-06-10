@@ -8,25 +8,28 @@ import {
   NodeTypes,
   EdgeTypes,
   ConnectionMode,
+  addEdge,
+  Connection,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
-import { useWorkstationStore }    from '@/store/useWorkstationStore'
-import { useChatSessionsStore }   from '@/store/chatSessionsStore'
-import SectionNode                from '@/components/nodes/SectionNode'
-import OverviewNode               from '@/components/nodes/OverviewNode'
+import { useWorkstationStore }     from '@/store/useWorkstationStore'
+import { useChatSessionsStore }    from '@/store/chatSessionsStore'
+import SectionNode                 from '@/components/nodes/SectionNode'
+import OverviewNode                from '@/components/nodes/OverviewNode'
 import { DependencyEdge, FlowEdge } from '@/components/edges'
-import FloatingChatCard           from '@/components/canvas/FloatingChatCard'
-import SessionTray                from '@/components/canvas/SessionTray'
-import Toolbar                    from '@/components/canvas/Toolbar'
-import ProjectSetup               from '@/components/canvas/ProjectSetup'
-import OrchestratorPanel          from '@/components/orchestrator/OrchestratorPanel'
-import Sidebar                    from '@/components/layout/Sidebar'
-import ElectronHeader             from '@/components/layout/ElectronHeader'
-import Dashboard                  from '@/screens/Dashboard'
-import WarRoom                    from '@/screens/WarRoom'
-import Settings                   from '@/screens/Settings'
-import Setup                      from '@/screens/Setup'
+import FloatingChatCard            from '@/components/canvas/FloatingChatCard'
+import SessionTray                 from '@/components/canvas/SessionTray'
+import ColumnLabels                from '@/components/canvas/ColumnLabels'
+import Toolbar                     from '@/components/canvas/Toolbar'
+import ProjectSetup                from '@/components/canvas/ProjectSetup'
+import OrchestratorPanel           from '@/components/orchestrator/OrchestratorPanel'
+import Sidebar                     from '@/components/layout/Sidebar'
+import ElectronHeader              from '@/components/layout/ElectronHeader'
+import Dashboard                   from '@/screens/Dashboard'
+import WarRoom                     from '@/screens/WarRoom'
+import Settings                    from '@/screens/Settings'
+import Setup                       from '@/screens/Setup'
 
 const HEADER_H       = 40
 const SETUP_DONE_KEY = 'workstation_setup_complete'
@@ -36,20 +39,20 @@ const nodeTypes: NodeTypes = {
   overviewNode: OverviewNode,
 }
 
-// DependencyEdge — solid, reactive to blocked state (turns amber)
-// FlowEdge       — dashed blue, user-created data flows
 const edgeTypes: EdgeTypes = {
   dependencyEdge: DependencyEdge,
   flowEdge:       FlowEdge,
-  // Legacy aliases so existing stored edges still render
   default:        DependencyEdge,
 }
 
 type Screen = 'canvas' | 'dashboard' | 'warroom' | 'settings'
 
 export default function App() {
-  const { nodes, edges, onNodesChange, onEdgesChange, project } = useWorkstationStore()
-  const { sessions }  = useChatSessionsStore()
+  const {
+    nodes, edges, onNodesChange, onEdgesChange, project,
+  } = useWorkstationStore()
+
+  const { sessions } = useChatSessionsStore()
 
   const [screen, setScreen]             = useState<Screen>('canvas')
   const [showSetup, setShowSetup]       = useState(false)
@@ -60,7 +63,24 @@ export default function App() {
     if (!done) setShowCLISetup(true)
   }, [])
 
-  const onConnect = useCallback(() => {}, [])
+  // Wire up onConnect so users can manually draw FlowEdges (dashed blue)
+  const onConnect = useCallback((connection: Connection) => {
+    const store = useWorkstationStore.getState()
+    const newEdge = {
+      id:     `flow-${connection.source}-${connection.target}-${Date.now()}`,
+      source: connection.source!,
+      target: connection.target!,
+      sourceHandle: connection.sourceHandle ?? undefined,
+      targetHandle: connection.targetHandle ?? undefined,
+      type:   'flowEdge',
+      data:   { kind: 'flow', reason: 'Data flow' },
+    }
+    // Use onEdgesChange with an add operation
+    store.onEdgesChange([{
+      type: 'add',
+      item: newEdge,
+    } as any])
+  }, [])
 
   // ── First launch ──────────────────────────────────────────────────────────
   if (showCLISetup) {
@@ -97,7 +117,10 @@ export default function App() {
         <Sidebar screen={screen} onChange={(s) => setScreen(s as Screen)} />
 
         {/* ── CENTRE: main content ── */}
-        <div style={{ flex: 1, height: '100%', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div style={{
+          flex: 1, height: '100%', position: 'relative',
+          overflow: 'hidden', display: 'flex', flexDirection: 'column',
+        }}>
 
           {screen === 'dashboard' && (
             <Dashboard
@@ -119,7 +142,10 @@ export default function App() {
               {showSetup && !project ? (
                 <ProjectSetup onDone={() => setShowSetup(false)} />
               ) : (
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%' }}>
+                <div style={{
+                  flex: 1, display: 'flex', flexDirection: 'column',
+                  overflow: 'hidden', height: '100%',
+                }}>
 
                   {/* Fixed toolbar above canvas */}
                   <div style={{
@@ -199,10 +225,22 @@ export default function App() {
                       )}
                     </ReactFlow>
 
+                    {/* ── Phase swim lane labels (overlaid on canvas) ── */}
+                    {project && (
+                      <div style={{
+                        position: 'absolute',
+                        top: 0, left: 0, right: 0, bottom: 0,
+                        pointerEvents: 'none',
+                        zIndex: 5,
+                      }}>
+                        <ColumnLabels />
+                      </div>
+                    )}
+
                     {/* ── Session Tray — top-left pill rail ── */}
                     <SessionTray />
 
-                    {/* ── All open FloatingChatCards — one per open session ── */}
+                    {/* ── All open FloatingChatCards ── */}
                     {openSessionIds.map(nodeId => (
                       <FloatingChatCard key={nodeId} nodeId={nodeId} />
                     ))}
