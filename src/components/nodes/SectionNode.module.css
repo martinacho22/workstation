@@ -5,7 +5,7 @@
   border-radius: 10px;
   cursor: pointer;
   position: relative;
-  overflow: visible;        /* allow InlineTerminal to overflow below */
+  overflow: visible;
   transition: border-color 0.15s, box-shadow 0.15s;
   user-select: none;
 }
@@ -21,9 +21,22 @@
   box-shadow: 0 0 0 1px rgba(0,255,136,0.12);
 }
 
+/* Chat card is open for this node — blue accent ring */
 .active {
-  border-color: rgba(0,255,136,0.55) !important;
-  box-shadow: 0 0 0 2px rgba(0,255,136,0.18), 0 4px 20px rgba(0,0,0,0.35) !important;
+  border-color: rgba(124,158,255,0.55) !important;
+  box-shadow: 0 0 0 2px rgba(124,158,255,0.15), 0 4px 20px rgba(0,0,0,0.35) !important;
+}
+
+/* Small blue indicator strip at bottom when chat is open */
+.chatRing {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(124,158,255,0.6);
+  border-radius: 0 0 10px 10px;
+  pointer-events: none;
 }
 
 .done {
@@ -36,7 +49,7 @@
   background: rgba(240,192,64,0.03);
 }
 
-/* ── Session dot — floats above the node when terminal is open ── */
+/* ── Session dot — floats above node when terminal is open ── */
 .sessionDot {
   position: absolute;
   top: -10px;
@@ -47,15 +60,15 @@
   border-radius: 50%;
   background: var(--accent, #00ff88);
   box-shadow: 0 0 8px rgba(0,255,136,0.9), 0 0 16px rgba(0,255,136,0.4);
-  animation: pulse 2s ease-in-out infinite;
+  animation: pulseDot 2s ease-in-out infinite;
   z-index: 10;
 }
-@keyframes pulse {
+@keyframes pulseDot {
   0%, 100% { opacity: 1; transform: translateX(-50%) scale(1); }
   50%       { opacity: 0.6; transform: translateX(-50%) scale(0.85); }
 }
 
-/* ── Hint bar — appears on hover ── */
+/* ── Hint bar ── */
 .hintBar {
   position: absolute;
   bottom: calc(100% + 6px);
@@ -86,18 +99,6 @@
   width: 3px;
   border-radius: 10px 0 0 10px;
   transition: background 0.2s;
-}
-
-/* Active bottom indicator */
-.activeBar {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: var(--accent, #00ff88);
-  opacity: 0.5;
-  border-radius: 0 0 10px 10px;
 }
 
 .body {
@@ -174,7 +175,6 @@
   padding: 1px 5px;
 }
 
-/* Handle */
 .handle {
   width: 8px;
   height: 8px;
