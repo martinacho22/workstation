@@ -78,6 +78,19 @@ export interface SessionDecision {
   createdAt: number
 }
 
+// ─── Session preset kinds ─────────────────────────────────────────────────────
+
+/**
+ * The type of Claude Code session being opened.
+ * Determines the preset system prompt sent on boot.
+ */
+export type SessionPresetKind =
+  | 'setup'      // Project scaffolding, env, tooling
+  | 'feature'    // Building a new feature / section
+  | 'bug'        // Investigating and fixing a bug
+  | 'refactor'   // Improving code structure without changing behaviour
+  | 'review'     // Reviewing code quality, tests, coverage
+
 // ─── Project ──────────────────────────────────────────────────────────────────
 
 export interface GrillAnswer {
@@ -96,7 +109,8 @@ export interface Project {
   name: string
   description: string
   stack: string
-  repoPath?: string          // local path to the codebase
+  repoPath?: string          // user-selected path (optional override)
+  projectDir?: string        // auto-created ~/Workstation Projects/<name>/ — canonical CWD
   grillAnswers?: GrillAnswer[]
   blueprint?: BlueprintSection[]
   adrs?: ArchitectureDecisionRecord[]
@@ -128,6 +142,7 @@ export interface ProjectContext {
   projectDescription: string
   stack: string
   repoPath?: string
+  projectDir?: string
   sections: { label: string; status: string; description?: string }[]
   adrs: { title: string; decision: string; reason: string }[]
   bugs: { description: string; affectedSection: string; status: string }[]
@@ -144,6 +159,7 @@ export interface ProjectMeta {
   description: string
   stack: string
   repoPath?: string
+  projectDir?: string
   progress: number
   sectionsTotal: number
   sectionsDone: number
