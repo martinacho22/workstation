@@ -142,10 +142,10 @@ function TasksSection() {
 // ─── Orchestrator Chat ────────────────────────────────────────────────────────
 
 const PHASE_LABELS: Record<string, string> = {
-  generating:  'Generating blueprint…',
-  critiquing:  'Reviewing for stress points…',
+  generating:   'Generating blueprint…',
+  critiquing:   'Reviewing for stress points…',
   'laying-out': 'Calculating layout…',
-  done:        '',
+  done:         '',
 }
 
 function OrchestratorChat() {
@@ -203,7 +203,6 @@ function OrchestratorChat() {
     const label = PHASE_LABELS[blueprintPhase]
     if (!label) return
     setMessages(prev => {
-      // Replace existing pipeline status message instead of appending
       const withoutPrev = prev.filter(m => !Object.values(PHASE_LABELS).includes(m.content))
       return [...withoutPrev, {
         id: nanoid(6), role: 'assistant', content: label,
@@ -224,7 +223,7 @@ function OrchestratorChat() {
         if (blueprintCritique && !blueprintCritique.startsWith('Critic pass skipped')) {
           parts.push(`\nReview: ${blueprintCritique}`)
         }
-        parts.push('\nClick any node to open its workspace.')
+        parts.push('\nClick any node to open its planning chat.')
         return [...filtered, {
           id: nanoid(6), role: 'assistant',
           content: parts.join(''), timestamp: Date.now(), isSystem: true,
@@ -309,6 +308,17 @@ Developer: ${text}`
 
   return (
     <div className={styles.chat}>
+
+      {/* ── Architect identity bar ──
+          Green ◈ + "Architect" label — makes it instantly clear this is
+          the project-level planner, NOT the worker chat (which is blue).
+      ── */}
+      <div className={styles.chatIdentityBar}>
+        <div className={styles.chatIdentityAvatar}>◈</div>
+        <span className={styles.chatIdentityLabel}>Architect</span>
+        <span className={styles.chatIdentitySub}>project planner</span>
+      </div>
+
       <div className={styles.chatMessages}>
         {messages.map(msg => (
           <div
@@ -396,7 +406,6 @@ export default function OrchestratorPanel({ showChat = true }: Props) {
 
         {showChat && (
           <div className={styles.chatZone}>
-            <div className={styles.zoneLabel}>Orchestrator</div>
             <OrchestratorChat />
           </div>
         )}
