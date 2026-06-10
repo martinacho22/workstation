@@ -8,11 +8,11 @@ import styles from './OrchestratorPanel.module.css'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface OrchestratorMessage {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
+  id:        string
+  role:      'user' | 'assistant'
+  content:   string
   timestamp: number
-  isGrill?: boolean
+  isGrill?:  boolean
   isSystem?: boolean
 }
 
@@ -65,7 +65,7 @@ function RoadmapSection() {
                 styles[`phase_${node.data.status}`],
                 isCurrent ? styles.phaseCurrent : '',
               ].join(' ')}
-              onClick={() => setActiveNode(node.id)}
+              onClick={() => setActiveNode(isCurrent ? null : node.id)}
               title={bp?.description ?? node.data.label}
             >
               <div className={styles.phaseLeft}>
@@ -90,7 +90,7 @@ function RoadmapSection() {
 // ─── Tasks Section ────────────────────────────────────────────────────────────
 
 function TasksSection() {
-  const { nodes, setActiveNode } = useWorkstationStore()
+  const { nodes, setActiveNode, activeNodeId } = useWorkstationStore()
   const tasks = nodes.filter(n => n.data.kind === 'section')
 
   const active  = tasks.filter(n => n.data.status === 'active')
@@ -123,8 +123,8 @@ function TasksSection() {
           {group.items.map(node => (
             <div
               key={node.id}
-              className={styles.taskItem}
-              onClick={() => setActiveNode(node.id)}
+              className={`${styles.taskItem} ${node.id === activeNodeId ? styles.taskItemActive : ''}`}
+              onClick={() => setActiveNode(node.id === activeNodeId ? null : node.id)}
             >
               <span className={styles.taskDot} style={{ background: group.color }} />
               <span className={styles.taskLabel}>{node.data.label}</span>
@@ -141,26 +141,34 @@ function TasksSection() {
 
 // ─── Orchestrator Chat ────────────────────────────────────────────────────────
 
+const PHASE_LABELS: Record<string, string> = {
+  generating:  'Generating blueprint…',
+  critiquing:  'Reviewing for stress points…',
+  'laying-out': 'Calculating layout…',
+  done:        '',
+}
+
 function OrchestratorChat() {
   const store = useWorkstationStore()
   const {
     project, nodes,
     grillLoading, grillQuestion, grillAnswers,
     startGrill, answerGrill,
-    blueprintLoading,
+    blueprintLoading, blueprintPhase, blueprintCritique,
     executeCommands,
   } = store
 
   const sectionCount = nodes.filter(n => n.data.kind === 'section').length
 
   const [messages, setMessages] = useState<OrchestratorMessage[]>([{
-    id: 'init',
-    role: 'assistant',
-    content: project
+    id:        'init',
+    role:      'assistant',
+    content:   project
       ? `"${project.name}" is open. ${sectionCount > 0 ? `${sectionCount} phases on the canvas.` : 'No phases yet — what are we building first?'}`
-      : 'Describe what you want to build. I\'ll plan it out, ask you some questions, then lay the phases on the canvas automatically.',
+      : "Describe what you want to build. I'll plan it, ask a few questions, then lay the phases on the canvas automatically.",
     timestamp: Date.now(),
   }])
+
   const [input, setInput]     = useState('')
   const [loading, setLoading] = useState(false)
   const [phase, setPhase]     = useState<'chat' | 'grilling'>('chat')
@@ -168,7 +176,7 @@ function OrchestratorChat() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, grillQuestion])
+  }, [messages, grillQuestion, blueprintPhase])
 
   // Sync grill question into messages
   useEffect(() => {
@@ -179,51 +187,51 @@ function OrchestratorChat() {
       setMessages(prev => {
         if (prev.some(m => m.content.startsWith(q))) return prev
         return [...prev, {
-          id: nanoid(6),
-          role: 'assistant',
-          content: q + (rec ? `\n\nSuggested: ${rec}` : ''),
+          id:        nanoid(6),
+          role:      'assistant',
+          content:   q + (rec ? `\n\nSuggested: ${rec}` : ''),
           timestamp: Date.now(),
-          isGrill: true,
+          isGrill:   true,
         }]
       })
     }
   }, [grillQuestion, phase])
 
-  // Blueprint loading → show status message
+  // Show 3-pass pipeline status messages
   useEffect(() => {
-    if (blueprintLoading) {
-      setMessages(prev => {
-        if (prev.some(m => m.content === 'Generating phases…')) return prev
-        return [...prev, {
-          id: nanoid(6),
-          role: 'assistant',
-          content: 'Generating phases…',
-          timestamp: Date.now(),
-          isSystem: true,
-        }]
-      })
-    }
-  }, [blueprintLoading])
+    if (!blueprintLoading || blueprintPhase === 'idle' || blueprintPhase === 'done') return
+    const label = PHASE_LABELS[blueprintPhase]
+    if (!label) return
+    setMessages(prev => {
+      // Replace existing pipeline status message instead of appending
+      const withoutPrev = prev.filter(m => !Object.values(PHASE_LABELS).includes(m.content))
+      return [...withoutPrev, {
+        id: nanoid(6), role: 'assistant', content: label,
+        timestamp: Date.now(), isSystem: true,
+      }]
+    })
+  }, [blueprintPhase, blueprintLoading])
 
-  // Blueprint done → confirm
+  // Blueprint done — show critique and confirm
   useEffect(() => {
-    if (!blueprintLoading && sectionCount > 0 && phase === 'grilling') {
+    if (!blueprintLoading && blueprintPhase === 'done' && sectionCount > 0 && phase === 'grilling') {
       setPhase('chat')
       setMessages(prev => {
         const alreadyConfirmed = prev.some(m => m.content.startsWith('Done —'))
         if (alreadyConfirmed) return prev
-        // Remove the "Generating phases…" placeholder
-        const filtered = prev.filter(m => m.content !== 'Generating phases…')
+        const filtered = prev.filter(m => !Object.values(PHASE_LABELS).some(l => l && m.content === l))
+        const parts: string[] = [`Done — ${sectionCount} phases placed on the canvas.`]
+        if (blueprintCritique && !blueprintCritique.startsWith('Critic pass skipped')) {
+          parts.push(`\nReview: ${blueprintCritique}`)
+        }
+        parts.push('\nClick any node to open its workspace.')
         return [...filtered, {
-          id: nanoid(6),
-          role: 'assistant',
-          content: `Done — ${sectionCount} phases placed on the canvas. Double-click any node to open a work session.`,
-          timestamp: Date.now(),
-          isSystem: true,
+          id: nanoid(6), role: 'assistant',
+          content: parts.join(''), timestamp: Date.now(), isSystem: true,
         }]
       })
     }
-  }, [blueprintLoading, sectionCount, phase])
+  }, [blueprintLoading, blueprintPhase, sectionCount, phase, blueprintCritique])
 
   async function handleSend() {
     const text = input.trim()
@@ -234,10 +242,9 @@ function OrchestratorChat() {
       id: nanoid(6), role: 'user', content: text, timestamp: Date.now(),
     }])
 
-    // ── Grill Me phase — feed answer to store ─────────────────────────────
+    // ── Grill Me phase ────────────────────────────────────────────────────
     if (phase === 'grilling') {
       await answerGrill(text)
-      // answerGrill auto-triggers generateBlueprint after 6 answers
       return
     }
 
@@ -253,8 +260,6 @@ function OrchestratorChat() {
         `${m.role === 'user' ? 'Developer' : 'Orchestrator'}: ${m.content}`
       ).join('\n')
 
-      const systemPrompt = ORCHESTRATOR_SYSTEM_PROMPT
-
       const userPrompt = `Project: ${ctx.projectName || 'none'} | Stack: ${ctx.stack || 'unknown'}
 Existing phases:\n${sectionSummary}
 
@@ -262,32 +267,26 @@ Recent conversation:\n${recentHistory}
 
 Developer: ${text}`
 
-      const raw = await runClaude(userPrompt, { systemPrompt })
+      const raw = await runClaude(userPrompt, { systemPrompt: ORCHESTRATOR_SYSTEM_PROMPT })
       const { cleanText, commands } = parseIntent(raw)
 
-      // Execute any canvas commands Claude embedded in its response
-      if (commands.length > 0) {
-        executeCommands(commands)
-      }
+      if (commands.length > 0) executeCommands(commands)
 
       setMessages(prev => [...prev, {
         id: nanoid(6), role: 'assistant',
-        content: cleanText || (commands.length > 0 ? 'Done — canvas updated.' : '…'),
+        content: cleanText || (commands.length > 0 ? 'Canvas updated.' : '…'),
         timestamp: Date.now(),
       }])
 
-      // If no project yet and the response didn't already spawn a blueprint,
-      // automatically start the grill flow so the next turn begins Q&A
+      // If no project yet → auto start grill flow
       if (!project && commands.length === 0) {
         setPhase('grilling')
         await startGrill(text)
       }
-
     } catch (err) {
-      const errMsg = err instanceof Error ? err.message : 'Claude CLI not responding. Check Settings.'
       setMessages(prev => [...prev, {
         id: nanoid(6), role: 'assistant',
-        content: errMsg,
+        content: err instanceof Error ? err.message : 'Claude CLI not responding. Check Settings.',
         timestamp: Date.now(),
       }])
     } finally {
@@ -295,30 +294,18 @@ Developer: ${text}`
     }
   }
 
-  const isWaiting = loading || grillLoading || blueprintLoading
-
-  function getPlaceholder() {
-    if (phase === 'grilling') return 'Answer (or press Enter to use the suggestion)…'
-    if (!project)            return 'Describe what you want to build…'
-    return 'What are we building next?'
-  }
-
-  // Allow Enter to accept the recommendation when grilling
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       if (phase === 'grilling' && !input.trim() && grillQuestion) {
-        // Accept recommendation
         const rec = grillQuestion.split('\n\nRecommendation:')[1]?.trim()
-        if (rec) {
-          setInput(rec)
-          setTimeout(() => handleSend(), 50)
-          return
-        }
+        if (rec) { setInput(rec); setTimeout(() => handleSend(), 50); return }
       }
       handleSend()
     }
   }
+
+  const isWaiting = loading || grillLoading || blueprintLoading
 
   return (
     <div className={styles.chat}>
@@ -329,14 +316,12 @@ Developer: ${text}`
             className={[
               styles.chatMsg,
               styles[`chatMsg_${msg.role}`],
-              msg.isSystem  ? styles.chatMsg_system : '',
-              msg.isGrill   ? styles.chatMsg_grill  : '',
+              msg.isSystem ? styles.chatMsg_system : '',
+              msg.isGrill  ? styles.chatMsg_grill  : '',
             ].join(' ')}
           >
             {msg.role === 'assistant' && (
-              <span className={styles.chatAvatar}>
-                {msg.isSystem ? '→' : '◈'}
-              </span>
+              <span className={styles.chatAvatar}>{msg.isSystem ? '→' : '◈'}</span>
             )}
             <div className={styles.chatBubble}>
               {msg.content.split('\n').map((line, i, arr) => (
@@ -346,7 +331,7 @@ Developer: ${text}`
           </div>
         ))}
 
-        {isWaiting && (
+        {isWaiting && !blueprintLoading && (
           <div className={`${styles.chatMsg} ${styles.chatMsg_assistant}`}>
             <span className={styles.chatAvatar}>◈</span>
             <div className={styles.chatBubble}>
@@ -357,7 +342,6 @@ Developer: ${text}`
         <div ref={bottomRef} />
       </div>
 
-      {/* Grill hint — press Enter to accept recommendation */}
       {phase === 'grilling' && grillQuestion && (
         <div className={styles.grillHint}>
           Press Enter with empty input to accept the suggestion
@@ -370,7 +354,11 @@ Developer: ${text}`
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={getPlaceholder()}
+          placeholder={
+            phase === 'grilling'  ? 'Answer (Enter to accept suggestion)…' :
+            !project              ? 'Describe what you want to build…' :
+            'What are we building next?'
+          }
           rows={1}
           disabled={isWaiting}
         />
@@ -395,13 +383,11 @@ interface Props {
 export default function OrchestratorPanel({ showChat = true }: Props) {
   return (
     <div className={styles.panel}>
-      {/* Top third — roadmap */}
       <div className={styles.roadmapZone}>
         <div className={styles.zoneLabel}>Roadmap</div>
         <RoadmapSection />
       </div>
 
-      {/* Bottom — tasks always visible, chat only on canvas */}
       <div className={styles.bottomZone}>
         <div className={showChat ? styles.tasksZone : styles.tasksZoneFull}>
           <div className={styles.zoneLabel}>Tasks</div>
