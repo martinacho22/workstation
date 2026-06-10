@@ -13,34 +13,78 @@ import {
 import '@xyflow/react/dist/style.css'
 
 import { useWorkstationStore } from '@/store/useWorkstationStore'
-import SectionNode  from '@/components/nodes/SectionNode'
-import OverviewNode from '@/components/nodes/OverviewNode'
-import { FlowEdge }  from '@/components/edges'
-import Toolbar       from '@/components/canvas/Toolbar'
-import ProjectSetup  from '@/components/canvas/ProjectSetup'
-import SessionView   from '@/components/session/SessionView'
+import SectionNode       from '@/components/nodes/SectionNode'
+import OverviewNode      from '@/components/nodes/OverviewNode'
+import { FlowEdge }      from '@/components/edges'
+import Toolbar           from '@/components/canvas/Toolbar'
+import ProjectSetup      from '@/components/canvas/ProjectSetup'
+import SessionView       from '@/components/session/SessionView'
+import OrchestratorPanel from '@/components/orchestrator/OrchestratorPanel'
+import ElectronHeader    from '@/components/layout/ElectronHeader'
+import Dashboard         from '@/screens/Dashboard'
+import WarRoom           from '@/screens/WarRoom'
+import Settings          from '@/screens/Settings'
+import Setup             from '@/screens/Setup'
 
-import ElectronHeader from '@/components/layout/ElectronHeader'
-import Sidebar        from '@/components/layout/Sidebar'
-import Dashboard      from '@/screens/Dashboard'
-import WarRoom        from '@/screens/WarRoom'
-import Settings       from '@/screens/Settings'
-import Setup          from '@/screens/Setup'
-import { Screen }     from '@/types/screens'
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const HEADER_H    = 40
+const SETUP_DONE_KEY = 'workstation_setup_complete'
 
 const nodeTypes: NodeTypes = {
   sectionNode:  SectionNode,
   overviewNode: OverviewNode,
 }
-
 const edgeTypes: EdgeTypes = {
   flowEdge: FlowEdge,
 }
 
-const SETUP_DONE_KEY = 'workstation_setup_complete'
+// ─── Top-level nav ────────────────────────────────────────────────────────────
 
-// Height of the ElectronHeader — everything shifts down by this
-const HEADER_H = 40
+type Screen = 'canvas' | 'dashboard' | 'warroom' | 'settings'
+
+function NavBar({ screen, onChange }: { screen: Screen; onChange: (s: Screen) => void }) {
+  const items: { id: Screen; label: string }[] = [
+    { id: 'canvas',    label: 'Canvas'    },
+    { id: 'dashboard', label: 'Projects'  },
+    { id: 'warroom',   label: 'War Room'  },
+    { id: 'settings',  label: 'Settings'  },
+  ]
+  return (
+    <div style={{
+      position: 'absolute',
+      top: 12,
+      right: 16,
+      display: 'flex',
+      gap: 4,
+      zIndex: 200,
+    }}>
+      {items.map(item => (
+        <button
+          key={item.id}
+          onClick={() => onChange(item.id)}
+          style={{
+            padding: '4px 12px',
+            borderRadius: 6,
+            border: '1px solid',
+            borderColor: screen === item.id ? 'rgba(0,255,136,0.4)' : 'rgba(255,255,255,0.08)',
+            background: screen === item.id ? 'rgba(0,255,136,0.1)' : 'transparent',
+            color: screen === item.id ? 'var(--accent, #00ff88)' : 'rgba(255,255,255,0.4)',
+            fontSize: 11,
+            fontWeight: 600,
+            cursor: 'pointer',
+            letterSpacing: '0.04em',
+            WebkitAppRegion: 'no-drag',
+          } as React.CSSProperties}
+        >
+          {item.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ─── App ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
   const {
@@ -49,7 +93,7 @@ export default function App() {
     project, activeNodeId, setActiveNode,
   } = useWorkstationStore()
 
-  const [screen, setScreen]             = useState<Screen>('dashboard')
+  const [screen, setScreen]             = useState<Screen>('canvas')
   const [showSetup, setShowSetup]       = useState(false)
   const [showCLISetup, setShowCLISetup] = useState(false)
 
@@ -58,7 +102,6 @@ export default function App() {
     if (!done) setShowCLISetup(true)
   }, [])
 
-  // Esc closes session view
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') setActiveNode(null)
@@ -69,6 +112,7 @@ export default function App() {
 
   const onConnect = useCallback(() => {}, [])
 
+  // ── CLI setup wizard (first launch) ──────────────────────────────────────
   if (showCLISetup) {
     return (
       <>
@@ -87,26 +131,27 @@ export default function App() {
 
   return (
     <>
-      {/* ── Persistent titlebar / status header ── */}
+      {/* ── Persistent titlebar ── */}
       <ElectronHeader />
+      {/* Nav lives in the header stripe — rendered inside ElectronHeader's
+          right zone — but we overlay it here above everything */}
+      <NavBar screen={screen} onChange={(s) => {
+        if (s !== 'canvas') setActiveNode(null)
+        setScreen(s)
+      }} />
 
-      {/* ── Everything below the header ── */}
+      {/* ── Main layout ── */}
       <div style={{
         display: 'flex',
         width: '100vw',
         height: `calc(100vh - ${HEADER_H}px)`,
         marginTop: HEADER_H,
         overflow: 'hidden',
-        background: 'var(--bg)',
+        background: 'var(--bg, #0d0d14)',
       }}>
-        <Sidebar
-          current={screen}
-          onChange={(s) => {
-            if (s !== 'canvas') setActiveNode(null)
-            setScreen(s)
-          }}
-          collapsed={screen === 'canvas'}
-        />
+
+        {/* ── Orchestrator Panel — always visible on canvas ── */}
+        {screen === 'canvas' && <OrchestratorPanel />}
 
         {/* ── Dashboard ── */}
         {screen === 'dashboard' && (
@@ -133,7 +178,7 @@ export default function App() {
               <ProjectSetup onDone={() => setShowSetup(false)} />
             ) : (
               <>
-                {/* Canvas — hidden behind session when session is open */}
+                {/* Canvas — fades when session is open */}
                 <div style={{
                   position: 'absolute',
                   inset: 0,
@@ -164,35 +209,33 @@ export default function App() {
                       size={1}
                       color="rgba(255,255,255,0.04)"
                     />
-                    <Controls
-                      style={{
-                        background: 'var(--surface)',
-                        border: '1px solid var(--border)',
-                        borderRadius: 'var(--radius)',
-                      }}
-                    />
+                    <Controls style={{
+                      background: 'var(--surface, rgba(255,255,255,0.05))',
+                      border: '1px solid var(--border, rgba(255,255,255,0.08))',
+                      borderRadius: 8,
+                    }} />
                     <MiniMap
                       style={{
-                        background: 'var(--surface)',
-                        border: '1px solid var(--border)',
-                        borderRadius: 'var(--radius)',
+                        background: 'var(--surface, rgba(255,255,255,0.03))',
+                        border: '1px solid var(--border, rgba(255,255,255,0.06))',
+                        borderRadius: 8,
                       }}
                       nodeColor={(n) => {
                         if (n.data?.status === 'done')    return 'rgba(74,222,128,0.6)'
                         if (n.data?.status === 'blocked') return 'rgba(240,192,64,0.6)'
-                        if (n.data?.kind === 'overview')  return 'var(--accent)'
-                        return 'var(--surface2, rgba(255,255,255,0.08))'
+                        if (n.data?.status === 'active')  return 'rgba(0,255,136,0.6)'
+                        if (n.data?.kind   === 'overview')return 'var(--accent, #00ff88)'
+                        return 'rgba(255,255,255,0.08)'
                       }}
                       maskColor="rgba(10,10,15,0.7)"
                     />
-                    {/* Toolbar offset below header — no top overlap */}
                     <Panel position="top-center" style={{ marginTop: 8 }}>
-                      <Toolbar />
+                      <Toolbar onNewProject={() => setShowSetup(true)} />
                     </Panel>
                   </ReactFlow>
                 </div>
 
-                {/* Session view — full screen overlay within content area */}
+                {/* Session view overlay */}
                 {sessionOpen && (
                   <div style={{ position: 'absolute', inset: 0, zIndex: 10 }}>
                     <SessionView />
