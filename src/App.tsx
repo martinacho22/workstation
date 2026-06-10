@@ -8,17 +8,16 @@ import {
   NodeTypes,
   EdgeTypes,
   ConnectionMode,
-  Panel,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
 import { useWorkstationStore } from '@/store/useWorkstationStore'
 import SectionNode       from '@/components/nodes/SectionNode'
 import OverviewNode      from '@/components/nodes/OverviewNode'
+import NodeWorkspace     from '@/components/nodes/NodeWorkspace'
 import { FlowEdge }      from '@/components/edges'
 import Toolbar           from '@/components/canvas/Toolbar'
 import ProjectSetup      from '@/components/canvas/ProjectSetup'
-import SessionView       from '@/components/session/SessionView'
 import OrchestratorPanel from '@/components/orchestrator/OrchestratorPanel'
 import Sidebar           from '@/components/layout/Sidebar'
 import ElectronHeader    from '@/components/layout/ElectronHeader'
@@ -31,6 +30,11 @@ import Setup             from '@/screens/Setup'
 
 const HEADER_H       = 40
 const SETUP_DONE_KEY = 'workstation_setup_complete'
+
+// When workspace is open, canvas takes this % of the canvas column height
+// Workspace gets the rest.
+const CANVAS_SPLIT_PCT  = 42   // canvas: 42%
+const WORKSPACE_MIN_PX  = 320  // never shorter than this
 
 const nodeTypes: NodeTypes = {
   sectionNode:  SectionNode,
@@ -90,7 +94,7 @@ export default function App() {
     )
   }
 
-  const sessionOpen = !!activeNodeId && screen === 'canvas'
+  const workspaceOpen = !!activeNodeId && screen === 'canvas'
 
   return (
     <>
@@ -111,7 +115,7 @@ export default function App() {
         <Sidebar screen={screen} onChange={handleScreenChange} />
 
         {/* ── CENTRE: main content area ── */}
-        <div style={{ flex: 1, height: '100%', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ flex: 1, height: '100%', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
           {/* Dashboard */}
           {screen === 'dashboard' && (
@@ -141,28 +145,29 @@ export default function App() {
               {showSetup && !project ? (
                 <ProjectSetup onDone={() => setShowSetup(false)} />
               ) : (
-                <>
-                  {/* Canvas — fades when session is open */}
-                  <div style={{
-                    position:      'absolute',
-                    inset:         0,
-                    opacity:       sessionOpen ? 0 : 1,
-                    pointerEvents: sessionOpen ? 'none' : 'auto',
-                    transition:    'opacity 0.15s',
-                    display:       'flex',
-                    flexDirection: 'column',
-                  }}>
-                    {/* Toolbar fixed above canvas, not floating inside */}
-                    <div style={{
-                      flexShrink:     0,
-                      borderBottom:   '1px solid rgba(255,255,255,0.06)',
-                      background:     'rgba(10,10,18,0.95)',
-                      backdropFilter: 'blur(8px)',
-                    }}>
-                      <Toolbar onNewProject={() => setShowSetup(true)} />
-                    </div>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
-                    <div style={{ flex: 1, position: 'relative' }}>
+                  {/* Toolbar — fixed above canvas, not inside ReactFlow */}
+                  <div style={{
+                    flexShrink:     0,
+                    borderBottom:   '1px solid rgba(255,255,255,0.06)',
+                    background:     'rgba(10,10,18,0.95)',
+                    backdropFilter: 'blur(8px)',
+                  }}>
+                    <Toolbar onNewProject={() => setShowSetup(true)} />
+                  </div>
+
+                  {/* Canvas + workspace split */}
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+
+                    {/* Canvas — shrinks when workspace is open */}
+                    <div style={{
+                      flex:       workspaceOpen ? `0 0 ${CANVAS_SPLIT_PCT}%` : '1',
+                      minHeight:  workspaceOpen ? 120 : undefined,
+                      position:   'relative',
+                      transition: 'flex 0.2s ease',
+                      overflow:   'hidden',
+                    }}>
                       <ReactFlow
                         nodes={nodes}
                         edges={edges}
@@ -173,8 +178,8 @@ export default function App() {
                         edgeTypes={edgeTypes}
                         connectionMode={ConnectionMode.Loose}
                         fitView
-                        fitViewOptions={{ padding: 0.4 }}
-                        minZoom={0.2}
+                        fitViewOptions={{ padding: 0.35 }}
+                        minZoom={0.15}
                         maxZoom={2}
                         proOptions={{ hideAttribution: true }}
                         style={{ background: 'transparent' }}
@@ -191,57 +196,68 @@ export default function App() {
                           border:       '1px solid var(--border, rgba(255,255,255,0.08))',
                           borderRadius: 8,
                         }} />
-                        <MiniMap
-                          style={{
-                            background:   'var(--surface, rgba(255,255,255,0.03))',
-                            border:       '1px solid var(--border, rgba(255,255,255,0.06))',
-                            borderRadius: 8,
-                          }}
-                          nodeColor={(n) => {
-                            if (n.data?.status === 'done')     return 'rgba(74,222,128,0.6)'
-                            if (n.data?.status === 'blocked')  return 'rgba(240,192,64,0.6)'
-                            if (n.data?.status === 'active')   return 'rgba(0,255,136,0.6)'
-                            if (n.data?.kind   === 'overview') return 'var(--accent, #00ff88)'
-                            return 'rgba(255,255,255,0.08)'
-                          }}
-                          maskColor="rgba(10,10,15,0.7)"
-                        />
+                        {!workspaceOpen && (
+                          <MiniMap
+                            style={{
+                              background:   'var(--surface, rgba(255,255,255,0.03))',
+                              border:       '1px solid var(--border, rgba(255,255,255,0.06))',
+                              borderRadius: 8,
+                            }}
+                            nodeColor={(n) => {
+                              if (n.data?.status === 'done')     return 'rgba(74,222,128,0.6)'
+                              if (n.data?.status === 'blocked')  return 'rgba(240,192,64,0.6)'
+                              if (n.data?.status === 'active')   return 'rgba(0,255,136,0.6)'
+                              if (n.data?.kind   === 'overview') return 'var(--accent, #00ff88)'
+                              return 'rgba(255,255,255,0.08)'
+                            }}
+                            maskColor="rgba(10,10,15,0.7)"
+                          />
+                        )}
 
                         {/* Empty canvas prompt */}
                         {!project && (
-                          <Panel position="top-center" style={{ marginTop: 60 }}>
-                            <div style={{
-                              textAlign:  'center',
-                              color:      'rgba(255,255,255,0.18)',
-                              fontSize:   13,
-                              lineHeight: 1.6,
-                            }}>
-                              <div style={{ fontSize: 26, marginBottom: 8, opacity: 0.25 }}>⬡</div>
-                              <div style={{ fontWeight: 600, marginBottom: 4 }}>No project open</div>
-                              <div style={{ fontSize: 12, opacity: 0.7 }}>
-                                Describe your idea in the Orchestrator panel →
-                              </div>
+                          <div style={{
+                            position:   'absolute',
+                            top:        '50%',
+                            left:       '50%',
+                            transform:  'translate(-50%,-50%)',
+                            textAlign:  'center',
+                            color:      'rgba(255,255,255,0.18)',
+                            fontSize:   13,
+                            lineHeight: 1.6,
+                            pointerEvents: 'none',
+                          }}>
+                            <div style={{ fontSize: 26, marginBottom: 8, opacity: 0.2 }}>⬡</div>
+                            <div style={{ fontWeight: 600, marginBottom: 4 }}>No project open</div>
+                            <div style={{ fontSize: 12, opacity: 0.7 }}>
+                              Describe your idea in the Orchestrator panel →
                             </div>
-                          </Panel>
+                          </div>
                         )}
                       </ReactFlow>
                     </div>
-                  </div>
 
-                  {/* Session view overlay */}
-                  {sessionOpen && (
-                    <div style={{ position: 'absolute', inset: 0, zIndex: 10 }}>
-                      <SessionView />
-                    </div>
-                  )}
-                </>
+                    {/* NodeWorkspace — inline panel below canvas */}
+                    {workspaceOpen && (
+                      <div style={{
+                        flex:       `1 1 ${100 - CANVAS_SPLIT_PCT}%`,
+                        minHeight:  WORKSPACE_MIN_PX,
+                        overflow:   'hidden',
+                        display:    'flex',
+                        flexDirection: 'column',
+                      }}>
+                        <NodeWorkspace />
+                      </div>
+                    )}
+
+                  </div>
+                </div>
               )}
             </>
           )}
         </div>
 
-        {/* ── RIGHT: orchestrator panel — always visible ──────────────────── */}
-        {/* showChat=true on canvas, false on other screens (roadmap+tasks only) */}
+        {/* ── RIGHT: orchestrator panel — always visible ── */}
         <OrchestratorPanel showChat={screen === 'canvas'} />
 
       </div>
