@@ -22,152 +22,81 @@
   flex-shrink: 0;
 }
 
-/* ── Roadmap zone (top 32%) ────────────────────────────────────────────────── */
-.roadmapZone {
-  flex: 0 0 32%;
+/* ── Pill Rail — compact roadmap strip (32px) after blueprint exists ─────── */
+.pillRail {
+  flex-shrink: 0;
   border-bottom: 1px solid rgba(255,255,255,0.06);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.roadmapEmpty, .tasksEmpty {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-}
-.roadmapEmptyText, .tasksEmptyText {
-  font-size: 11px;
-  color: rgba(255,255,255,0.15);
-  text-align: center;
-  line-height: 1.5;
-}
-
-.roadmap {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding: 0 0 8px;
-}
-
-.roadmapHeader {
-  padding: 0 14px 8px;
+  padding: 6px 10px 7px;
   display: flex;
   flex-direction: column;
   gap: 5px;
-  flex-shrink: 0;
+  background: rgba(0,0,0,0.15);
 }
 
-.roadmapBar {
-  height: 3px;
-  background: rgba(255,255,255,0.07);
-  border-radius: 2px;
+.pillProgress {
+  height: 2px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 1px;
   overflow: hidden;
 }
-.roadmapFill {
+.pillProgressFill {
   height: 100%;
   background: var(--accent, #00ff88);
-  border-radius: 2px;
+  border-radius: 1px;
   transition: width 0.4s ease;
 }
 
-.roadmapStats {
+.pillList {
   display: flex;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 20px;
+  padding: 3px 8px 3px 6px;
   font-size: 10px;
-}
-.statDone    { color: #4ade80; }
-.statActive  { color: var(--accent, #00ff88); }
-.statBlocked { color: #f0c040; }
-.statTotal   { color: rgba(255,255,255,0.28); margin-left: auto; }
-
-.phases {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 0 8px;
-}
-.phases::-webkit-scrollbar { width: 3px; }
-.phases::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.07); border-radius: 2px; }
-
-.phase {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 8px;
-  border-radius: 6px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.45);
   cursor: pointer;
-  transition: background 0.12s;
-  min-width: 0;
+  font-family: inherit;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  white-space: nowrap;
 }
-.phase:hover { background: rgba(255,255,255,0.05); }
+.pill:hover {
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.75);
+}
 
-.phaseCurrent {
-  background: rgba(0,255,136,0.06) !important;
-  border: 1px solid rgba(0,255,136,0.12);
+.pillCurrent {
+  background: rgba(0,255,136,0.07) !important;
+  border-color: rgba(0,255,136,0.2) !important;
+  color: rgba(0,255,136,0.8) !important;
 }
 
-.phaseLeft {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  flex-shrink: 0;
-}
-.phaseIndex {
-  font-size: 9px;
-  color: rgba(255,255,255,0.18);
-  width: 12px;
-  text-align: right;
-}
-.phaseDot {
-  width: 6px;
-  height: 6px;
+.pill_done    { border-color: rgba(74,222,128,0.15); }
+.pill_active  { border-color: rgba(0,255,136,0.2); color: rgba(0,255,136,0.6); }
+.pill_blocked { border-color: rgba(240,192,64,0.2); color: rgba(240,192,64,0.6); }
+
+.pillDot {
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   flex-shrink: 0;
 }
-.phaseDot[data-status="done"]    { background: #4ade80; }
-.phaseDot[data-status="active"]  { background: var(--accent, #00ff88); }
-.phaseDot[data-status="blocked"] { background: #f0c040; }
-.phaseDot[data-status="idle"]    { background: rgba(255,255,255,0.18); }
+.pillDot[data-status="done"]    { background: #4ade80; }
+.pillDot[data-status="active"]  { background: var(--accent, #00ff88); }
+.pillDot[data-status="blocked"] { background: #f0c040; }
+.pillDot[data-status="idle"]    { background: rgba(255,255,255,0.18); }
 
-.phaseBody {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
+.pillLabel {
+  line-height: 1;
 }
-.phaseLabel {
-  font-size: 11px;
-  font-weight: 500;
-  color: rgba(255,255,255,0.78);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.phaseDesc {
-  font-size: 9px;
-  color: rgba(255,255,255,0.22);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.phaseStatus {
-  font-size: 8px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgba(255,255,255,0.18);
-  flex-shrink: 0;
-}
-.phase_done    .phaseStatus { color: #4ade80; }
-.phase_active  .phaseStatus { color: var(--accent, #00ff88); }
-.phase_blocked .phaseStatus { color: #f0c040; }
 
 /* ── Bottom zone ───────────────────────────────────────────────────────────── */
 .bottomZone {
@@ -193,6 +122,20 @@
   flex-direction: column;
   overflow: hidden;
   min-width: 0;
+}
+
+.tasksEmpty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.tasksEmptyText {
+  font-size: 11px;
+  color: rgba(255,255,255,0.15);
+  text-align: center;
+  line-height: 1.5;
 }
 
 .tasks {
@@ -226,8 +169,6 @@
   min-width: 0;
 }
 .taskItem:hover { background: rgba(255,255,255,0.05); }
-
-/* Currently active/selected node */
 .taskItemActive {
   background: rgba(0,255,136,0.06) !important;
   border: 1px solid rgba(0,255,136,0.12);
@@ -254,10 +195,7 @@
   min-width: 0;
 }
 
-/* ── Architect identity header ──────────────────────────────────────────────
-   Makes it immediately clear this is the "Architect" Claude — the
-   project-level planner. Distinct from FloatingChatCard (worker, blue).
-*/
+/* ── Architect identity header ───────────────────────────────────────────── */
 .chatIdentityBar {
   display: flex;
   align-items: center;
@@ -293,6 +231,7 @@
   margin-left: auto;
 }
 
+/* ── Chat ─────────────────────────────────────────────────────────────────── */
 .chat {
   flex: 1;
   display: flex;
@@ -314,7 +253,6 @@
 .chatMsg { display: flex; align-items: flex-start; gap: 6px; }
 .chatMsg_user { flex-direction: row-reverse; }
 
-/* System messages */
 .chatMsg_system .chatBubble {
   background: rgba(0,255,136,0.06) !important;
   border: 1px solid rgba(0,255,136,0.10);
@@ -327,14 +265,12 @@
   font-size: 12px;
 }
 
-/* Grill messages — warm tint for Q&A mode */
 .chatMsg_grill .chatBubble {
   background: rgba(255,200,60,0.05) !important;
   border: 1px solid rgba(255,200,60,0.10);
   color: rgba(255,255,255,0.78) !important;
 }
 
-/* Architect avatar — green circle with ◈ */
 .chatAvatar {
   width: 20px;
   height: 20px;
@@ -362,7 +298,6 @@
   color: rgba(255,255,255,0.72);
   border-bottom-left-radius: 3px;
 }
-/* User bubble — green tint to match architect identity */
 .chatMsg_user .chatBubble {
   background: rgba(0,255,136,0.09);
   border: 1px solid rgba(0,255,136,0.14);
@@ -384,7 +319,7 @@
   30%            { transform: translateY(-4px); opacity: 0.9; }
 }
 
-/* ── Grill hint bar ───────────────────────────────────────────────────────── */
+/* ── Grill hint ───────────────────────────────────────────────────────────── */
 .grillHint {
   padding: 5px 10px;
   font-size: 9px;
