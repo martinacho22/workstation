@@ -13,6 +13,7 @@ import {
 } from '@/types'
 import { nanoid } from 'nanoid'
 import { runClaude } from '@/lib/claudeRunner'
+import { CanvasCommand } from '@/lib/intentParser'
 
 // ─── State Shape ──────────────────────────────────────────────────────────────
 
@@ -49,10 +50,13 @@ interface WorkstationState {
   edges: Edge[]
   onNodesChange: (changes: NodeChange[]) => void
   onEdgesChange: (changes: EdgeChange[]) => void
-  addSectionNode: (label: string, position?: { x: number; y: number }) => string
+  addSectionNode: (label: string, position?: { x: number; y: number }, description?: string) => string
   updateNodeStatus: (id: string, status: WorkstationNodeData['status'], blockedReason?: BlockedReason) => void
   deleteNode: (id: string) => void
   renameNode: (id: string, label: string) => void
+
+  // ── NEW: execute canvas commands from intent parser ──────────────────────
+  executeCommands: (commands: CanvasCommand[]) => void
 
   // Session (active work view)
   activeNodeId: string | null
@@ -310,6 +314,9 @@ RECOMMENDATION: [your recommended answer]`
 
         if (newAnswers.length >= 6) {
           set((s) => { s.grillLoading = false })
+          // Auto-trigger blueprint generation after 6 answers
+          get().finishGrill()
+          await get().generateBlueprint()
           return
         }
 
@@ -413,8 +420,34 @@ Rules:
         if (store.project) {
           set((s) => { if (s.project) s.project.blueprint = sections })
         }
+        // Clear existing section nodes first, keep overview
+        set((s) => {
+          s.nodes = s.nodes.filter(n => n.data.kind === 'overview')
+          s.edges = []
+        })
         sections.forEach((section, i) => {
-          store.addSectionNode(section.label, { x: 600 + i * 520, y: 300 })
+          store.addSectionNode(section.label, { x: 600 + i * 520, y: 300 }, section.description)
+        })
+        // Wire edges based on dependsOn
+        const state = get()
+        sections.forEach((section) => {
+          if (section.dependsOn?.length > 0) {
+            section.dependsOn.forEach((depLabel) => {
+              const fromNode = state.nodes.find(n => n.data.label === depLabel)
+              const toNode   = state.nodes.find(n => n.data.label === section.label)
+              if (fromNode && toNode) {
+                set((s) => {
+                  s.edges.push({
+                    id: nanoid(6),
+                    source: fromNode.id,
+                    target: toNode.id,
+                    type: 'flowEdge',
+                    data: { kind: 'flow' },
+                  })
+                })
+              }
+            })
+          }
         })
       },
 
@@ -429,20 +462,21 @@ Rules:
       onEdgesChange: (changes) =>
         set((s) => { s.edges = applyEdgeChanges(changes, s.edges) }),
 
-      addSectionNode: (label, position) => {
+      addSectionNode: (label, position, description) => {
         const { nodes } = get()
         const mainNodes  = nodes.filter(n => n.data.kind === 'section' || n.data.kind === 'overview')
         const rightmost  = mainNodes.reduce((max, n) => Math.max(max, n.position.x), 0)
         const pos        = position ?? { x: rightmost + 520, y: 300 }
-        const node       = makeNode('section', label, pos)
-        const lastMain   = mainNodes[mainNodes.length - 1]
+        const node       = makeNode('section', label, pos, description ? { description } as Partial<WorkstationNodeData> : {})
+        const lastSection = nodes.filter(n => n.data.kind === 'section').slice(-1)[0]
 
         set((s) => {
           s.nodes.push(node)
-          if (lastMain) {
+          // Auto-connect to previous section if no explicit depends
+          if (lastSection && !position) {
             s.edges.push({
               id: nanoid(6),
-              source: lastMain.id,
+              source: lastSection.id,
               target: node.id,
               type: 'flowEdge',
               data: { kind: 'flow' },
@@ -473,6 +507,87 @@ Rules:
         const n = s.nodes.find(n => n.id === id)
         if (n && label.trim()) { n.data.label = label.trim(); n.data.updatedAt = Date.now() }
       }),
+
+      // ── Execute Canvas Commands (from intent parser) ───────────────────────
+
+      executeCommands: (commands: CanvasCommand[]) => {
+        const store = get()
+
+        for (const cmd of commands) {
+          switch (cmd.type) {
+
+            case 'BLUEPRINT': {
+              // Full blueprint — clear existing sections, place all nodes
+              const sections: BlueprintSection[] = cmd.nodes.map(n => ({
+                label: n.label,
+                description: n.description,
+                dependsOn: n.depends ? [n.depends] : [],
+              }))
+              store.applyBlueprint(sections)
+              // Save to project blueprint
+              set((s) => { if (s.project) s.project.blueprint = sections })
+              break
+            }
+
+            case 'SPAWN_NODE': {
+              // Don't duplicate if label already exists
+              const exists = store.nodes.some(n => n.data.label === cmd.label)
+              if (!exists) {
+                store.addSectionNode(cmd.label, undefined, cmd.description)
+                // If blueprint exists, add to it
+                set((s) => {
+                  if (s.project) {
+                    if (!s.project.blueprint) s.project.blueprint = []
+                    s.project.blueprint.push({
+                      label: cmd.label,
+                      description: cmd.description ?? '',
+                      dependsOn: cmd.depends ? [cmd.depends] : [],
+                    })
+                  }
+                })
+              }
+              break
+            }
+
+            case 'UPDATE_STATUS': {
+              const node = store.nodes.find(n => n.data.label === cmd.label)
+              if (node) store.updateNodeStatus(node.id, cmd.status)
+              break
+            }
+
+            case 'ADD_EDGE': {
+              const fromNode = store.nodes.find(n => n.data.label === cmd.from)
+              const toNode   = store.nodes.find(n => n.data.label === cmd.to)
+              if (fromNode && toNode) {
+                const alreadyExists = store.edges.some(
+                  e => e.source === fromNode.id && e.target === toNode.id
+                )
+                if (!alreadyExists) {
+                  set((s) => {
+                    s.edges.push({
+                      id: nanoid(6),
+                      source: fromNode.id,
+                      target: toNode.id,
+                      type: 'flowEdge',
+                      data: { kind: 'flow' },
+                    })
+                  })
+                }
+              }
+              break
+            }
+
+            case 'SET_PHASE':
+              // Update project phase label — informational, stored on project
+              set((s) => {
+                if (s.project) {
+                  (s.project as any).currentPhase = cmd.phase
+                }
+              })
+              break
+          }
+        }
+      },
 
       // ── Session ───────────────────────────────────────────────────────────
 
