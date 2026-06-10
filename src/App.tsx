@@ -13,22 +13,16 @@ import {
 import '@xyflow/react/dist/style.css'
 
 import { useWorkstationStore } from '@/store/useWorkstationStore'
-import SectionNode        from '@/components/nodes/SectionNode'
-import OverviewNode       from '@/components/nodes/OverviewNode'
-import HandoffNode        from '@/components/nodes/HandoffNode'
-import DeployNode         from '@/components/nodes/DeployNode'
-import BugNode            from '@/components/nodes/BugNode'
-import MinimizedPills     from '@/components/canvas/MinimizedPills'
-import Toolbar            from '@/components/canvas/Toolbar'
-import RoadmapOverlay     from '@/components/canvas/RoadmapOverlay'
-import ProjectSetup       from '@/components/canvas/ProjectSetup'
-import ProgressBackground from '@/components/canvas/ProgressBackground'
-import { FlowEdge, TangentEdge, TiebackEdge } from '@/components/edges'
+import SectionNode  from '@/components/nodes/SectionNode'
+import OverviewNode from '@/components/nodes/OverviewNode'
+import { FlowEdge }  from '@/components/edges'
+import Toolbar       from '@/components/canvas/Toolbar'
+import ProjectSetup  from '@/components/canvas/ProjectSetup'
+import SessionView   from '@/components/session/SessionView'
 
 import Sidebar    from '@/components/layout/Sidebar'
 import Dashboard  from '@/screens/Dashboard'
 import WarRoom    from '@/screens/WarRoom'
-import Projects   from '@/screens/Projects'
 import Settings   from '@/screens/Settings'
 import Setup      from '@/screens/Setup'
 import { Screen } from '@/types/screens'
@@ -36,15 +30,10 @@ import { Screen } from '@/types/screens'
 const nodeTypes: NodeTypes = {
   sectionNode:  SectionNode,
   overviewNode: OverviewNode,
-  handoffNode:  HandoffNode,
-  deployNode:   DeployNode,
-  bugNode:      BugNode,
 }
 
 const edgeTypes: EdgeTypes = {
-  flowEdge:    FlowEdge,
-  tangentEdge: TangentEdge,
-  tiebackEdge: TiebackEdge,
+  flowEdge: FlowEdge,
 }
 
 const SETUP_DONE_KEY = 'workstation_setup_complete'
@@ -53,23 +42,19 @@ export default function App() {
   const {
     nodes, edges,
     onNodesChange, onEdgesChange,
-    project, roadmapVisible,
-    setActiveNode,
+    project, activeNodeId, setActiveNode,
   } = useWorkstationStore()
 
-  const [screen, setScreen]             = useState<Screen>('dashboard')
-  const [showSetup, setShowSetup]       = useState(false)
+  const [screen, setScreen]           = useState<Screen>('dashboard')
+  const [showSetup, setShowSetup]     = useState(false)
   const [showCLISetup, setShowCLISetup] = useState(false)
-
-  const sidebarCollapsed = screen === 'canvas'
 
   useEffect(() => {
     const done = localStorage.getItem(SETUP_DONE_KEY)
     if (!done) setShowCLISetup(true)
   }, [])
 
-  const onConnect = useCallback(() => {}, [])
-
+  // Esc closes session view
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') setActiveNode(null)
@@ -78,37 +63,17 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [setActiveNode])
 
-  function handleSetupComplete() {
-    localStorage.setItem(SETUP_DONE_KEY, 'true')
-    setShowCLISetup(false)
-  }
-
-  function handleOpenCanvas(_projectId: string) {
-    setShowSetup(false)
-    setScreen('canvas')
-  }
-
-  function handleNewProject() {
-    setShowSetup(true)
-    setScreen('canvas')
-  }
-
-  function handleLoadTemplate(_templateId: string) {
-    setShowSetup(true)
-    setScreen('canvas')
-  }
-
-  function handleImport(_path: string) {
-    setScreen('canvas')
-  }
-
-  function handleWarRoom() {
-    setScreen('warroom')
-  }
+  const onConnect = useCallback(() => {}, [])
 
   if (showCLISetup) {
-    return <Setup onComplete={handleSetupComplete} />
+    return <Setup onComplete={() => {
+      localStorage.setItem(SETUP_DONE_KEY, 'true')
+      setShowCLISetup(false)
+    }} />
   }
+
+  // Session view overlays the canvas when a node is active
+  const sessionOpen = !!activeNodeId && screen === 'canvas'
 
   return (
     <div style={{
@@ -120,90 +85,112 @@ export default function App() {
     }}>
       <Sidebar
         current={screen}
-        onChange={setScreen}
-        collapsed={sidebarCollapsed}
+        onChange={(s) => {
+          // Closing session if navigating away
+          if (s !== 'canvas') setActiveNode(null)
+          setScreen(s)
+        }}
+        collapsed={screen === 'canvas'}
       />
 
+      {/* ── Dashboard ── */}
       {screen === 'dashboard' && (
         <Dashboard
-          onOpenCanvas={handleOpenCanvas}
-          onNewProject={handleNewProject}
-          onWarRoom={handleWarRoom}
+          onOpenCanvas={(id) => {
+            useWorkstationStore.getState().switchProject(id)
+            setShowSetup(false)
+            setScreen('canvas')
+          }}
+          onNewProject={() => {
+            setShowSetup(true)
+            setScreen('canvas')
+          }}
+          onWarRoom={() => setScreen('warroom')}
         />
       )}
 
+      {/* ── Canvas + Session ── */}
       {screen === 'canvas' && (
-        <div style={{ flex: 1, height: '100vh', position: 'relative' }}>
+        <div style={{ flex: 1, height: '100vh', position: 'relative', overflow: 'hidden' }}>
+
+          {/* Project setup wizard */}
           {showSetup && !project ? (
             <ProjectSetup onDone={() => setShowSetup(false)} />
           ) : (
             <>
-              <ProgressBackground />
+              {/* Canvas — always rendered, hidden behind session */}
+              <div style={{
+                position: 'absolute',
+                inset: 0,
+                opacity: sessionOpen ? 0 : 1,
+                pointerEvents: sessionOpen ? 'none' : 'auto',
+                transition: 'opacity 0.15s',
+              }}>
+                <ReactFlow
+                  nodes={nodes}
+                  edges={edges}
+                  onNodesChange={onNodesChange}
+                  onEdgesChange={onEdgesChange}
+                  onConnect={onConnect}
+                  nodeTypes={nodeTypes}
+                  edgeTypes={edgeTypes}
+                  connectionMode={ConnectionMode.Loose}
+                  fitView
+                  fitViewOptions={{ padding: 0.4 }}
+                  minZoom={0.2}
+                  maxZoom={2}
+                  proOptions={{ hideAttribution: true }}
+                  style={{ background: 'transparent' }}
+                  onPaneClick={() => setActiveNode(null)}
+                >
+                  <Background
+                    variant={BackgroundVariant.Dots}
+                    gap={28}
+                    size={1}
+                    color="rgba(255,255,255,0.04)"
+                  />
+                  <Controls
+                    style={{
+                      background: 'var(--surface)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 'var(--radius)',
+                    }}
+                  />
+                  <MiniMap
+                    style={{
+                      background: 'var(--surface)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 'var(--radius)',
+                    }}
+                    nodeColor={(n) => {
+                      if (n.data?.status === 'done')    return 'rgba(74,222,128,0.6)'
+                      if (n.data?.status === 'blocked') return 'rgba(240,192,64,0.6)'
+                      if (n.data?.kind === 'overview')  return 'var(--accent)'
+                      return 'var(--surface2, rgba(255,255,255,0.08))'
+                    }}
+                    maskColor="rgba(10,10,15,0.7)"
+                  />
+                  <Panel position="top-center">
+                    <Toolbar />
+                  </Panel>
+                </ReactFlow>
+              </div>
 
-              <ReactFlow
-                nodes={nodes}
-                edges={edges}
-                onNodesChange={onNodesChange}
-                onEdgesChange={onEdgesChange}
-                onConnect={onConnect}
-                nodeTypes={nodeTypes}
-                edgeTypes={edgeTypes}
-                connectionMode={ConnectionMode.Loose}
-                fitView
-                fitViewOptions={{ padding: 0.3 }}
-                minZoom={0.15}
-                maxZoom={2}
-                proOptions={{ hideAttribution: true }}
-                style={{ background: 'transparent' }}
-                onPaneClick={() => setActiveNode(null)}
-              >
-                <Background
-                  variant={BackgroundVariant.Dots}
-                  gap={28}
-                  size={1}
-                  color="rgba(255,255,255,0.04)"
-                />
-                <Controls
-                  style={{
-                    background: 'var(--surface)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 'var(--radius)',
-                  }}
-                />
-                <MiniMap
-                  style={{
-                    background: 'var(--surface)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 'var(--radius)',
-                  }}
-                  nodeColor={(n) => {
-                    if (n.data?.kind === 'deploy')    return 'rgba(0,200,255,0.6)'
-                    if (n.data?.kind === 'bug')       return 'rgba(255,96,96,0.6)'
-                    if (n.data?.status === 'done')    return 'var(--done)'
-                    if (n.data?.status === 'blocked') return 'rgba(255,200,60,0.6)'
-                    if (n.data?.kind === 'overview')  return 'var(--accent)'
-                    return 'var(--surface2)'
-                  }}
-                  maskColor="rgba(10,10,15,0.7)"
-                />
-                <Panel position="top-center">
-                  <Toolbar />
-                </Panel>
-              </ReactFlow>
-
-              <MinimizedPills />
-              {roadmapVisible && <RoadmapOverlay />}
+              {/* Session view — full screen overlay */}
+              {sessionOpen && (
+                <div style={{ position: 'absolute', inset: 0, zIndex: 10 }}>
+                  <SessionView />
+                </div>
+              )}
             </>
           )}
         </div>
       )}
 
+      {/* ── War Room ── */}
       {screen === 'warroom' && <WarRoom />}
 
-      {screen === 'projects' && (
-        <Projects onLoadTemplate={handleLoadTemplate} onImport={handleImport} />
-      )}
-
+      {/* ── Settings ── */}
       {screen === 'settings' && <Settings />}
     </div>
   )
