@@ -15,7 +15,7 @@ import { useWorkstationStore }    from '@/store/useWorkstationStore'
 import { useChatSessionsStore }   from '@/store/chatSessionsStore'
 import SectionNode                from '@/components/nodes/SectionNode'
 import OverviewNode               from '@/components/nodes/OverviewNode'
-import { FlowEdge }               from '@/components/edges'
+import { DependencyEdge, FlowEdge } from '@/components/edges'
 import FloatingChatCard           from '@/components/canvas/FloatingChatCard'
 import SessionTray                from '@/components/canvas/SessionTray'
 import Toolbar                    from '@/components/canvas/Toolbar'
@@ -35,8 +35,14 @@ const nodeTypes: NodeTypes = {
   sectionNode:  SectionNode,
   overviewNode: OverviewNode,
 }
+
+// DependencyEdge — solid, reactive to blocked state (turns amber)
+// FlowEdge       — dashed blue, user-created data flows
 const edgeTypes: EdgeTypes = {
-  flowEdge: FlowEdge,
+  dependencyEdge: DependencyEdge,
+  flowEdge:       FlowEdge,
+  // Legacy aliases so existing stored edges still render
+  default:        DependencyEdge,
 }
 
 type Screen = 'canvas' | 'dashboard' | 'warroom' | 'settings'
@@ -135,6 +141,7 @@ export default function App() {
                       onConnect={onConnect}
                       nodeTypes={nodeTypes}
                       edgeTypes={edgeTypes}
+                      defaultEdgeOptions={{ type: 'dependencyEdge' }}
                       connectionMode={ConnectionMode.Loose}
                       fitView
                       fitViewOptions={{ padding: 0.35 }}
