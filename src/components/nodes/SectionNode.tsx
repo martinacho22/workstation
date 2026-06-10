@@ -2,199 +2,176 @@ import { memo, useState } from 'react'
 import { Handle, Position, NodeProps } from '@xyflow/react'
 import { WorkstationNodeData } from '@/types'
 import { useWorkstationStore } from '@/store/useWorkstationStore'
-import TerminalPane from '@/components/panes/TerminalPane'
-import ChatPane from '@/components/panes/ChatPane'
-import NodeHeader from '@/components/nodes/NodeHeader'
 import styles from './SectionNode.module.css'
 
 function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
-  const { activeNodeId, setActiveNode, updateNodeStatus, addBugNode } = useWorkstationStore()
-  const isActive = activeNodeId === id
-  const [expanded, setExpanded] = useState(false)
-  const [showBlockedModal, setShowBlockedModal] = useState(false)
-  const [blockedReason, setBlockedReason] = useState('')
-  const [blockedBy, setBlockedBy] = useState('')
-  const [showContextFile, setShowContextFile] = useState(false)
-  const [showBugModal, setShowBugModal] = useState(false)
-  const [bugDesc, setBugDesc] = useState('')
+  const { setActiveNode, updateNodeStatus, deleteNode, renameNode, nodes } = useWorkstationStore()
+  const [renaming, setRenaming] = useState(false)
+  const [renameVal, setRenameVal] = useState(data.label)
+  const [showMenu, setShowMenu] = useState(false)
+  const [showBlockModal, setShowBlockModal] = useState(false)
+  const [blockReason, setBlockReason] = useState('')
+  const [blockBy, setBlockBy] = useState('')
 
-  const nodes = useWorkstationStore(s => s.nodes)
   const sectionNodes = nodes.filter(n => n.id !== id && (n.data.kind === 'section' || n.data.kind === 'overview'))
+  const messageCount = data.chatHistory?.length ?? 0
+  const hasHandoff = !!data.handoffDoc
+  const blueprint = useWorkstationStore(s => s.project?.blueprint)
+  const sectionDesc = blueprint?.find(b => b.label === data.label)?.description
 
-  if (data.status === 'minimized') return null
+  function commitRename() {
+    renameNode(id, renameVal)
+    setRenaming(false)
+  }
 
   function handleMarkBlocked() {
-    if (!blockedReason.trim()) return
+    if (!blockReason.trim()) return
     updateNodeStatus(id, 'blocked', {
-      reason: blockedReason.trim(),
-      blockedBy: blockedBy || undefined,
+      reason: blockReason.trim(),
+      blockedBy: blockBy || undefined,
       since: Date.now(),
     })
-    setShowBlockedModal(false)
-    setBlockedReason('')
-    setBlockedBy('')
+    setShowBlockModal(false)
+    setBlockReason('')
+    setBlockBy('')
   }
 
-  function handleAddBug() {
-    if (!bugDesc.trim()) return
-    addBugNode(id, bugDesc.trim())
-    setShowBugModal(false)
-    setBugDesc('')
-  }
+  const statusColor =
+    data.status === 'done'    ? 'var(--done, #4ade80)' :
+    data.status === 'blocked' ? '#f0c040' :
+    data.status === 'active'  ? 'var(--accent)' :
+    'rgba(255,255,255,0.15)'
 
   return (
-    <div
-      className={`
-        ${styles.node}
-        ${isActive ? styles.active : ''}
-        ${data.status === 'done' ? styles.done : ''}
-        ${data.status === 'blocked' ? styles.blocked : ''}
-        ${selected ? styles.selected : ''}
-      `}
-      onClick={() => setActiveNode(id)}
-      style={{ width: expanded ? 900 : 480 }}
-    >
-      <Handle type="target" position={Position.Left} className={styles.handle} />
-      <Handle type="source" position={Position.Right} className={styles.handle} />
-      <Handle type="source" position={Position.Bottom} id="tangent" className={styles.handleBottom} />
+    <>
+      <div
+        className={`${styles.node} ${selected ? styles.selected : ''} ${data.status === 'done' ? styles.done : ''} ${data.status === 'blocked' ? styles.blocked : ''}`}
+        onDoubleClick={() => setActiveNode(id)}
+        onContextMenu={e => { e.preventDefault(); setShowMenu(v => !v) }}
+      >
+        <Handle type="target" position={Position.Left} className={styles.handle} />
+        <Handle type="source" position={Position.Right} className={styles.handle} />
 
-      <NodeHeader
-        id={id}
-        data={data}
-        expanded={expanded}
-        onToggleExpand={() => setExpanded(e => !e)}
-      />
+        {/* Status indicator */}
+        <div className={styles.statusBar} style={{ background: statusColor }} />
 
-      {/* Blocked banner */}
-      {data.status === 'blocked' && data.blockedReason && (
-        <div className={styles.blockedBanner}>
-          <span className={styles.blockedIcon}>⚠</span>
-          <span className={styles.blockedText}>
-            <strong>Blocked:</strong> {data.blockedReason.reason}
-            {data.blockedReason.blockedBy && (
-              <span className={styles.blockedBy}> — waiting on {
-                nodes.find(n => n.id === data.blockedReason?.blockedBy)?.data.label || 'unknown'
-              }</span>
-            )}
-          </span>
-          <button
-            className={styles.unblockBtn}
-            onClick={(e) => { e.stopPropagation(); updateNodeStatus(id, 'idle') }}
-          >
-            Unblock
-          </button>
+        <div className={styles.body}>
+          {/* Label */}
+          {renaming ? (
+            <input
+              className={styles.renameInput}
+              value={renameVal}
+              autoFocus
+              onChange={e => setRenameVal(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={e => {
+                if (e.key === 'Enter') commitRename()
+                if (e.key === 'Escape') { setRenameVal(data.label); setRenaming(false) }
+              }}
+              onClick={e => e.stopPropagation()}
+            />
+          ) : (
+            <div className={styles.label} onDoubleClick={e => { e.stopPropagation(); setRenameVal(data.label); setRenaming(true) }}>
+              {data.label}
+            </div>
+          )}
+
+          {/* Description from blueprint */}
+          {sectionDesc && (
+            <div className={styles.desc}>{sectionDesc}</div>
+          )}
+
+          {/* Blocked reason */}
+          {data.status === 'blocked' && data.blockedReason && (
+            <div className={styles.blockedBadge}>
+              Blocked: {data.blockedReason.reason}
+            </div>
+          )}
+
+          {/* Footer meta */}
+          <div className={styles.footer}>
+            <span className={`${styles.statusLabel} ${styles[`status_${data.status}`]}`}>
+              {data.status}
+            </span>
+            <div className={styles.footerRight}>
+              {messageCount > 0 && (
+                <span className={styles.metaChip}>{messageCount} msgs</span>
+              )}
+              {hasHandoff && (
+                <span className={styles.metaChip} style={{ color: 'var(--accent)', borderColor: 'rgba(0,255,136,0.2)' }}>handoff</span>
+              )}
+            </div>
+          </div>
         </div>
-      )}
 
-      {/* Quick action bar */}
-      <div className={styles.quickActions} onClick={e => e.stopPropagation()}>
-        <button
-          className={styles.qaBtn}
-          title="Mark as blocked"
-          onClick={() => setShowBlockedModal(true)}
-          disabled={data.status === 'blocked' || data.status === 'done'}
-        >
-          ⚠ Block
-        </button>
-        <button
-          className={styles.qaBtn}
-          title="Add bug from this section"
-          onClick={() => setShowBugModal(true)}
-        >
-          🐛 Bug
-        </button>
-        {data.contextFile && (
-          <button
-            className={styles.qaBtn}
-            title="View context file"
-            onClick={() => setShowContextFile(v => !v)}
-          >
-            📋 Context
-          </button>
+        {/* Open session hint on hover */}
+        <div className={styles.openHint} onClick={e => { e.stopPropagation(); setActiveNode(id) }}>
+          Open session
+        </div>
+
+        {/* Context menu */}
+        {showMenu && (
+          <div className={styles.menu} onClick={e => e.stopPropagation()}>
+            <button className={styles.menuItem} onClick={() => { setActiveNode(id); setShowMenu(false) }}>
+              Open session
+            </button>
+            <button className={styles.menuItem} onClick={() => { setRenameVal(data.label); setRenaming(true); setShowMenu(false) }}>
+              Rename
+            </button>
+            <button className={styles.menuItem} onClick={() => { updateNodeStatus(id, data.status === 'done' ? 'idle' : 'done'); setShowMenu(false) }}>
+              {data.status === 'done' ? 'Reopen' : 'Mark done'}
+            </button>
+            {data.status !== 'blocked' && (
+              <button className={styles.menuItem} onClick={() => { setShowBlockModal(true); setShowMenu(false) }}>
+                Mark blocked
+              </button>
+            )}
+            {data.status === 'blocked' && (
+              <button className={styles.menuItem} onClick={() => { updateNodeStatus(id, 'idle'); setShowMenu(false) }}>
+                Unblock
+              </button>
+            )}
+            <div className={styles.menuDivider} />
+            <button className={`${styles.menuItem} ${styles.menuItemDanger}`} onClick={() => { deleteNode(id); setShowMenu(false) }}>
+              Delete
+            </button>
+          </div>
         )}
       </div>
 
-      {/* Context file preview */}
-      {showContextFile && data.contextFile && (
-        <div className={styles.contextPreview} onClick={e => e.stopPropagation()}>
-          <div className={styles.contextHeader}>
-            <span>Context File (auto-injected)</span>
-            <button className={styles.contextCopy} onClick={() => navigator.clipboard.writeText(data.contextFile || '')}>Copy</button>
-            <button className={styles.contextClose} onClick={() => setShowContextFile(false)}>✕</button>
-          </div>
-          <pre className={styles.contextContent}>{data.contextFile}</pre>
-        </div>
-      )}
-
-      <div className={styles.body}>
-        <div className={styles.terminalPane}>
-          <TerminalPane nodeId={id} active={isActive} />
-        </div>
-        <div className={styles.divider} />
-        <div className={styles.chatPane}>
-          <ChatPane nodeId={id} data={data} />
-        </div>
-      </div>
-
-      {/* Blocked modal */}
-      {showBlockedModal && (
-        <div className={styles.modal} onClick={e => e.stopPropagation()}>
-          <div className={styles.modalContent}>
-            <h4 className={styles.modalTitle}>⚠ Mark as Blocked</h4>
-            <label className={styles.modalLabel}>Why is this blocked?</label>
+      {/* Block modal — outside node div to avoid ReactFlow interference */}
+      {showBlockModal && (
+        <div className={styles.modalBackdrop} onClick={() => setShowBlockModal(false)}>
+          <div className={styles.modal} onClick={e => e.stopPropagation()}>
+            <h4 className={styles.modalTitle}>Mark as blocked</h4>
             <input
               className={styles.modalInput}
-              placeholder="e.g. Waiting for auth to be done first"
-              value={blockedReason}
-              onChange={e => setBlockedReason(e.target.value)}
+              placeholder="Why is this blocked?"
+              value={blockReason}
+              onChange={e => setBlockReason(e.target.value)}
               autoFocus
               onKeyDown={e => e.key === 'Enter' && handleMarkBlocked()}
             />
-            <label className={styles.modalLabel}>Blocked by which section? (optional)</label>
             <select
               className={styles.modalSelect}
-              value={blockedBy}
-              onChange={e => setBlockedBy(e.target.value)}
+              value={blockBy}
+              onChange={e => setBlockBy(e.target.value)}
             >
-              <option value="">None</option>
+              <option value="">Blocked by... (optional)</option>
               {sectionNodes.map(n => (
                 <option key={n.id} value={n.id}>{n.data.label}</option>
               ))}
             </select>
             <div className={styles.modalActions}>
-              <button className={styles.modalCancel} onClick={() => setShowBlockedModal(false)}>Cancel</button>
-              <button className={styles.modalConfirm} onClick={handleMarkBlocked} disabled={!blockedReason.trim()}>
-                Mark Blocked
+              <button className={styles.modalCancel} onClick={() => setShowBlockModal(false)}>Cancel</button>
+              <button className={styles.modalConfirm} onClick={handleMarkBlocked} disabled={!blockReason.trim()}>
+                Mark blocked
               </button>
             </div>
           </div>
         </div>
       )}
-
-      {/* Bug modal */}
-      {showBugModal && (
-        <div className={styles.modal} onClick={e => e.stopPropagation()}>
-          <div className={styles.modalContent}>
-            <h4 className={styles.modalTitle}>🐛 New Bug</h4>
-            <label className={styles.modalLabel}>Describe the bug</label>
-            <input
-              className={styles.modalInput}
-              placeholder="e.g. Login button crashes on mobile Safari"
-              value={bugDesc}
-              onChange={e => setBugDesc(e.target.value)}
-              autoFocus
-              onKeyDown={e => e.key === 'Enter' && handleAddBug()}
-            />
-            <div className={styles.modalActions}>
-              <button className={styles.modalCancel} onClick={() => setShowBugModal(false)}>Cancel</button>
-              <button className={styles.modalConfirm} onClick={handleAddBug} disabled={!bugDesc.trim()}>
-                Add Bug Node
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+    </>
   )
 }
 
