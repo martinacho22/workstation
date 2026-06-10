@@ -107,7 +107,6 @@
 }
 .phase:hover { background: rgba(255,255,255,0.05); }
 
-/* Currently open phase */
 .phaseCurrent {
   background: rgba(0,255,136,0.06) !important;
   border: 1px solid rgba(0,255,136,0.12);
@@ -179,7 +178,7 @@
   min-height: 0;
 }
 
-/* ── Tasks zone (left 35% of bottom when chat is present) ─────────────────── */
+/* ── Tasks zone ───────────────────────────────────────────────────────────── */
 .tasksZone {
   flex: 0 0 35%;
   border-right: 1px solid rgba(255,255,255,0.06);
@@ -188,8 +187,6 @@
   overflow: hidden;
   min-width: 0;
 }
-
-/* ── Tasks zone (full width when chat is hidden) ──────────────────────────── */
 .tasksZoneFull {
   flex: 1;
   display: flex;
@@ -216,7 +213,6 @@
   text-transform: uppercase;
   padding: 4px 6px 3px;
 }
-
 .taskItem {
   display: flex;
   align-items: center;
@@ -228,7 +224,6 @@
   min-width: 0;
 }
 .taskItem:hover { background: rgba(255,255,255,0.05); }
-
 .taskDot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
 .taskLabel {
   flex: 1;
@@ -240,7 +235,7 @@
 }
 .taskMsgCount { font-size: 9px; color: rgba(255,255,255,0.18); flex-shrink: 0; }
 
-/* ── Chat zone (right 65% of bottom) ──────────────────────────────────────── */
+/* ── Chat zone ────────────────────────────────────────────────────────────── */
 .chatZone {
   flex: 1;
   display: flex;
@@ -248,14 +243,12 @@
   overflow: hidden;
   min-width: 0;
 }
-
 .chat {
   flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
-
 .chatMessages {
   flex: 1;
   overflow-y: auto;
@@ -267,8 +260,29 @@
 .chatMessages::-webkit-scrollbar { width: 3px; }
 .chatMessages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 2px; }
 
+/* ── Messages ─────────────────────────────────────────────────────────────── */
 .chatMsg { display: flex; align-items: flex-start; gap: 6px; }
 .chatMsg_user { flex-direction: row-reverse; }
+
+/* System messages (blueprint generated, phase done, etc.) */
+.chatMsg_system .chatBubble {
+  background: rgba(0,255,136,0.06) !important;
+  border: 1px solid rgba(0,255,136,0.10);
+  color: rgba(0,255,136,0.8) !important;
+  font-size: 10px !important;
+}
+.chatMsg_system .chatAvatar {
+  background: rgba(0,255,136,0.06);
+  color: var(--accent, #00ff88);
+  font-size: 12px;
+}
+
+/* Grill messages — slightly highlighted to show Q&A mode */
+.chatMsg_grill .chatBubble {
+  background: rgba(255,200,60,0.05) !important;
+  border: 1px solid rgba(255,200,60,0.10);
+  color: rgba(255,255,255,0.78) !important;
+}
 
 .chatAvatar {
   width: 20px;
@@ -303,7 +317,7 @@
   border-bottom-right-radius: 3px;
 }
 
-/* Typing indicator */
+/* Typing dots */
 .typingDots { display: flex; gap: 3px; align-items: center; height: 14px; }
 .typingDots span {
   width: 4px; height: 4px; border-radius: 50%;
@@ -314,10 +328,22 @@
 .typingDots span:nth-child(3) { animation-delay: 0.4s; }
 @keyframes typingBounce {
   0%, 60%, 100% { transform: translateY(0);  opacity: 0.3; }
-  30%           { transform: translateY(-4px); opacity: 0.9; }
+  30%            { transform: translateY(-4px); opacity: 0.9; }
 }
 
-/* Input row */
+/* ── Grill hint bar ───────────────────────────────────────────────────────── */
+.grillHint {
+  padding: 5px 10px;
+  font-size: 9px;
+  color: rgba(255,200,60,0.55);
+  background: rgba(255,200,60,0.04);
+  border-top: 1px solid rgba(255,200,60,0.08);
+  text-align: center;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
+/* ── Input row ────────────────────────────────────────────────────────────── */
 .chatInputRow {
   display: flex;
   gap: 6px;
