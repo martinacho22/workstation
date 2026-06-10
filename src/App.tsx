@@ -11,22 +11,22 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
-import { useWorkstationStore } from '@/store/useWorkstationStore'
-import SectionNode          from '@/components/nodes/SectionNode'
-import OverviewNode         from '@/components/nodes/OverviewNode'
-import { FlowEdge }         from '@/components/edges'
-import FloatingChatCard     from '@/components/canvas/FloatingChatCard'
-import Toolbar              from '@/components/canvas/Toolbar'
-import ProjectSetup         from '@/components/canvas/ProjectSetup'
-import OrchestratorPanel    from '@/components/orchestrator/OrchestratorPanel'
-import Sidebar              from '@/components/layout/Sidebar'
-import ElectronHeader       from '@/components/layout/ElectronHeader'
-import Dashboard            from '@/screens/Dashboard'
-import WarRoom              from '@/screens/WarRoom'
-import Settings             from '@/screens/Settings'
-import Setup                from '@/screens/Setup'
-
-// ─── Constants ────────────────────────────────────────────────────────────────
+import { useWorkstationStore }    from '@/store/useWorkstationStore'
+import { useChatSessionsStore }   from '@/store/chatSessionsStore'
+import SectionNode                from '@/components/nodes/SectionNode'
+import OverviewNode               from '@/components/nodes/OverviewNode'
+import { FlowEdge }               from '@/components/edges'
+import FloatingChatCard           from '@/components/canvas/FloatingChatCard'
+import SessionTray                from '@/components/canvas/SessionTray'
+import Toolbar                    from '@/components/canvas/Toolbar'
+import ProjectSetup               from '@/components/canvas/ProjectSetup'
+import OrchestratorPanel          from '@/components/orchestrator/OrchestratorPanel'
+import Sidebar                    from '@/components/layout/Sidebar'
+import ElectronHeader             from '@/components/layout/ElectronHeader'
+import Dashboard                  from '@/screens/Dashboard'
+import WarRoom                    from '@/screens/WarRoom'
+import Settings                   from '@/screens/Settings'
+import Setup                      from '@/screens/Setup'
 
 const HEADER_H       = 40
 const SETUP_DONE_KEY = 'workstation_setup_complete'
@@ -41,14 +41,9 @@ const edgeTypes: EdgeTypes = {
 
 type Screen = 'canvas' | 'dashboard' | 'warroom' | 'settings'
 
-// ─── App ──────────────────────────────────────────────────────────────────────
-
 export default function App() {
-  const {
-    nodes, edges,
-    onNodesChange, onEdgesChange,
-    project, activeNodeId, setActiveNode,
-  } = useWorkstationStore()
+  const { nodes, edges, onNodesChange, onEdgesChange, project } = useWorkstationStore()
+  const { sessions }  = useChatSessionsStore()
 
   const [screen, setScreen]             = useState<Screen>('canvas')
   const [showSetup, setShowSetup]       = useState(false)
@@ -59,22 +54,9 @@ export default function App() {
     if (!done) setShowCLISetup(true)
   }, [])
 
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') setActiveNode(null)
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [setActiveNode])
-
   const onConnect = useCallback(() => {}, [])
 
-  const handleScreenChange = (s: Screen) => {
-    if (s !== 'canvas') setActiveNode(null)
-    setScreen(s)
-  }
-
-  // ── First launch wizard ───────────────────────────────────────────────────
+  // ── First launch ──────────────────────────────────────────────────────────
   if (showCLISetup) {
     return (
       <>
@@ -89,12 +71,13 @@ export default function App() {
     )
   }
 
+  // All nodeIds with open chat sessions (minimised OR visible)
+  const openSessionIds = Object.keys(sessions)
+
   return (
     <>
-      {/* ── Persistent titlebar ── */}
       <ElectronHeader />
 
-      {/* ── Main layout: sidebar | content | orchestrator ── */}
       <div style={{
         display:    'flex',
         width:      '100vw',
@@ -104,13 +87,12 @@ export default function App() {
         background: 'var(--bg, #0d0d14)',
       }}>
 
-        {/* ── LEFT: persistent sidebar nav ── */}
-        <Sidebar screen={screen} onChange={handleScreenChange} />
+        {/* ── LEFT: sidebar nav ── */}
+        <Sidebar screen={screen} onChange={(s) => setScreen(s as Screen)} />
 
-        {/* ── CENTRE: main content area ── */}
+        {/* ── CENTRE: main content ── */}
         <div style={{ flex: 1, height: '100%', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
-          {/* Dashboard */}
           {screen === 'dashboard' && (
             <Dashboard
               onOpenCanvas={(id) => {
@@ -118,21 +100,14 @@ export default function App() {
                 setShowSetup(false)
                 setScreen('canvas')
               }}
-              onNewProject={() => {
-                setShowSetup(true)
-                setScreen('canvas')
-              }}
+              onNewProject={() => { setShowSetup(true); setScreen('canvas') }}
               onWarRoom={() => setScreen('warroom')}
             />
           )}
 
-          {/* War Room */}
-          {screen === 'warroom' && <WarRoom />}
-
-          {/* Settings */}
+          {screen === 'warroom'  && <WarRoom />}
           {screen === 'settings' && <Settings />}
 
-          {/* Canvas — always full height, no splitting */}
           {screen === 'canvas' && (
             <>
               {showSetup && !project ? (
@@ -140,7 +115,7 @@ export default function App() {
               ) : (
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%' }}>
 
-                  {/* Toolbar — fixed above canvas */}
+                  {/* Fixed toolbar above canvas */}
                   <div style={{
                     flexShrink:     0,
                     borderBottom:   '1px solid rgba(255,255,255,0.06)',
@@ -167,7 +142,6 @@ export default function App() {
                       maxZoom={2}
                       proOptions={{ hideAttribution: true }}
                       style={{ background: 'transparent' }}
-                      onPaneClick={() => setActiveNode(null)}
                     >
                       <Background
                         variant={BackgroundVariant.Dots}
@@ -196,7 +170,7 @@ export default function App() {
                         maskColor="rgba(10,10,15,0.7)"
                       />
 
-                      {/* Empty canvas prompt */}
+                      {/* Empty state */}
                       {!project && (
                         <div style={{
                           position:      'absolute',
@@ -212,23 +186,19 @@ export default function App() {
                           <div style={{ fontSize: 26, marginBottom: 8, opacity: 0.2 }}>⬡</div>
                           <div style={{ fontWeight: 600, marginBottom: 4 }}>No project open</div>
                           <div style={{ fontSize: 12, opacity: 0.7 }}>
-                            Describe your idea in the Orchestrator panel →
+                            Describe your idea in the Orchestrator →
                           </div>
                         </div>
                       )}
                     </ReactFlow>
 
-                    {/* FloatingChatCard — fixed overlay, one layer above canvas
-                        Renders when a node is active. Minimises to a pill.
-                        Clicking a different node → previous card closes,
-                        new card opens (handled by setActiveNode in SectionNode). */}
-                    {activeNodeId && (
-                      <FloatingChatCard
-                        key={activeNodeId}
-                        nodeId={activeNodeId}
-                        onClose={() => setActiveNode(null)}
-                      />
-                    )}
+                    {/* ── Session Tray — top-left pill rail ── */}
+                    <SessionTray />
+
+                    {/* ── All open FloatingChatCards — one per open session ── */}
+                    {openSessionIds.map(nodeId => (
+                      <FloatingChatCard key={nodeId} nodeId={nodeId} />
+                    ))}
                   </div>
                 </div>
               )}
@@ -236,7 +206,7 @@ export default function App() {
           )}
         </div>
 
-        {/* ── RIGHT: orchestrator panel — always visible ── */}
+        {/* ── RIGHT: orchestrator panel ── */}
         <OrchestratorPanel showChat={screen === 'canvas'} />
 
       </div>
