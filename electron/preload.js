@@ -4,12 +4,6 @@ contextBridge.exposeInMainWorld('electron', {
 
   // ─── Terminal (PTY) ──────────────────────────────────────────────────────
   terminal: {
-    /**
-     * Create a terminal session.
-     * opts: { id, shell?, skipPermissions?, cwd?, presetPrompt? }
-     * - cwd: the working directory to spawn in (project folder)
-     * - presetPrompt: text to auto-type after the shell/claude boots
-     */
     create:   (opts)           => ipcRenderer.invoke('terminal:create', opts),
     write:    (id, data)       => ipcRenderer.invoke('terminal:write', { id, data }),
     resize:   (id, cols, rows) => ipcRenderer.invoke('terminal:resize', { id, cols, rows }),
@@ -28,7 +22,7 @@ contextBridge.exposeInMainWorld('electron', {
 
   // ─── Claude CLI Bridge ───────────────────────────────────────────────────
   claude: {
-    run:    (prompt, opts) => ipcRenderer.invoke('claude:run', { prompt, opts }),
+    run:    (prompt, opts)     => ipcRenderer.invoke('claude:run',    { prompt, opts }),
     stream: (id, prompt, opts) => ipcRenderer.invoke('claude:stream', { id, prompt, opts }),
     onChunk: (id, cb) => {
       const ch = `claude:stream:chunk:${id}`
@@ -50,6 +44,15 @@ contextBridge.exposeInMainWorld('electron', {
     fixAuth: ()  => ipcRenderer.invoke('claude:fix-auth'),
   },
 
+  // ─── Diagnostics ─────────────────────────────────────────────────────────
+  diagnostics: {
+    /**
+     * Returns { ptyAvailable, path, shell, home }
+     * Useful for debugging launch failures — call from InlineTerminal error state.
+     */
+    pty: () => ipcRenderer.invoke('diagnostics:pty'),
+  },
+
   // ─── System dialogs ──────────────────────────────────────────────────────
   dialog: {
     openFolder: () => ipcRenderer.invoke('dialog:openFolder'),
@@ -57,23 +60,10 @@ contextBridge.exposeInMainWorld('electron', {
 
   // ─── Filesystem helpers ──────────────────────────────────────────────────
   fs: {
-    /**
-     * Create ~/Workstation Projects/<projectName>/ on disk.
-     * Returns { success, projectDir }
-     */
     createProjectDir: (projectName) =>
       ipcRenderer.invoke('fs:createProjectDir', { projectName }),
-
-    /**
-     * Check whether a directory path exists.
-     * Returns { exists: boolean }
-     */
     checkDir: (dirPath) =>
       ipcRenderer.invoke('fs:checkDir', { dirPath }),
-
-    /**
-     * Open a directory in Finder / Explorer.
-     */
     openInFinder: (dirPath) =>
       ipcRenderer.invoke('fs:openInFinder', { dirPath }),
   },
