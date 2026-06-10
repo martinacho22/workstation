@@ -152,11 +152,11 @@ export default function App() {
                     display:       'flex',
                     flexDirection: 'column',
                   }}>
-                    {/* Toolbar fixed above the canvas, not floating inside it */}
+                    {/* Toolbar fixed above canvas, not floating inside */}
                     <div style={{
-                      flexShrink: 0,
-                      borderBottom: '1px solid rgba(255,255,255,0.06)',
-                      background: 'rgba(10,10,18,0.9)',
+                      flexShrink:     0,
+                      borderBottom:   '1px solid rgba(255,255,255,0.06)',
+                      background:     'rgba(10,10,18,0.95)',
                       backdropFilter: 'blur(8px)',
                     }}>
                       <Toolbar onNewProject={() => setShowSetup(true)} />
@@ -211,14 +211,16 @@ export default function App() {
                         {!project && (
                           <Panel position="top-center" style={{ marginTop: 60 }}>
                             <div style={{
-                              textAlign: 'center',
-                              color: 'rgba(255,255,255,0.2)',
-                              fontSize: 13,
+                              textAlign:  'center',
+                              color:      'rgba(255,255,255,0.18)',
+                              fontSize:   13,
                               lineHeight: 1.6,
                             }}>
-                              <div style={{ fontSize: 28, marginBottom: 8, opacity: 0.3 }}>⬡</div>
+                              <div style={{ fontSize: 26, marginBottom: 8, opacity: 0.25 }}>⬡</div>
                               <div style={{ fontWeight: 600, marginBottom: 4 }}>No project open</div>
-                              <div style={{ fontSize: 12 }}>Describe your idea in the Orchestrator → or click New Project</div>
+                              <div style={{ fontSize: 12, opacity: 0.7 }}>
+                                Describe your idea in the Orchestrator panel →
+                              </div>
                             </div>
                           </Panel>
                         )}
@@ -238,10 +240,9 @@ export default function App() {
           )}
         </div>
 
-        {/* ── RIGHT: orchestrator panel — always visible ── */}
-        {/* On non-canvas screens: roadmap + tasks only (chat hidden) */}
-        {/* On canvas: full panel */}
-        <OrchestratorPanel />
+        {/* ── RIGHT: orchestrator panel — always visible ──────────────────── */}
+        {/* showChat=true on canvas, false on other screens (roadmap+tasks only) */}
+        <OrchestratorPanel showChat={screen === 'canvas'} />
 
       </div>
     </>
