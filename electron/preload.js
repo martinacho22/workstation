@@ -1,59 +1,80 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('electron', {
+
   // ─── Terminal (PTY) ──────────────────────────────────────────────────────
   terminal: {
-    create: (opts) => ipcRenderer.invoke('terminal:create', opts),
-    write: (id, data) => ipcRenderer.invoke('terminal:write', { id, data }),
-    resize: (id, cols, rows) => ipcRenderer.invoke('terminal:resize', { id, cols, rows }),
-    kill: (id) => ipcRenderer.invoke('terminal:kill', { id }),
+    /**
+     * Create a terminal session.
+     * opts: { id, shell?, skipPermissions?, cwd?, presetPrompt? }
+     * - cwd: the working directory to spawn in (project folder)
+     * - presetPrompt: text to auto-type after the shell/claude boots
+     */
+    create:   (opts)           => ipcRenderer.invoke('terminal:create', opts),
+    write:    (id, data)       => ipcRenderer.invoke('terminal:write', { id, data }),
+    resize:   (id, cols, rows) => ipcRenderer.invoke('terminal:resize', { id, cols, rows }),
+    kill:     (id)             => ipcRenderer.invoke('terminal:kill', { id }),
     onData: (id, cb) => {
-      const channel = `terminal:data:${id}`
-      ipcRenderer.on(channel, (_, data) => cb(data))
-      return () => ipcRenderer.removeAllListeners(channel)
+      const ch = `terminal:data:${id}`
+      ipcRenderer.on(ch, (_, data) => cb(data))
+      return () => ipcRenderer.removeAllListeners(ch)
     },
     onExit: (id, cb) => {
-      const channel = `terminal:exit:${id}`
-      ipcRenderer.on(channel, cb)
-      return () => ipcRenderer.removeAllListeners(channel)
+      const ch = `terminal:exit:${id}`
+      ipcRenderer.on(ch, cb)
+      return () => ipcRenderer.removeAllListeners(ch)
     },
   },
 
   // ─── Claude CLI Bridge ───────────────────────────────────────────────────
   claude: {
-    // One-shot: returns { success, result } or { success, error }
-    run: (prompt, opts) => ipcRenderer.invoke('claude:run', { prompt, opts }),
-
-    // Streaming: chunks come back via onChunk callback
+    run:    (prompt, opts) => ipcRenderer.invoke('claude:run', { prompt, opts }),
     stream: (id, prompt, opts) => ipcRenderer.invoke('claude:stream', { id, prompt, opts }),
     onChunk: (id, cb) => {
-      const channel = `claude:stream:chunk:${id}`
-      ipcRenderer.on(channel, (_, chunk) => cb(chunk))
-      return () => ipcRenderer.removeAllListeners(channel)
+      const ch = `claude:stream:chunk:${id}`
+      ipcRenderer.on(ch, (_, chunk) => cb(chunk))
+      return () => ipcRenderer.removeAllListeners(ch)
     },
     onStreamDone: (id, cb) => {
-      const channel = `claude:stream:done:${id}`
-      ipcRenderer.on(channel, (_, full) => cb(full))
-      return () => ipcRenderer.removeAllListeners(channel)
+      const ch = `claude:stream:done:${id}`
+      ipcRenderer.on(ch, (_, full) => cb(full))
+      return () => ipcRenderer.removeAllListeners(ch)
     },
     onStreamError: (id, cb) => {
-      const channel = `claude:stream:error:${id}`
-      ipcRenderer.on(channel, (_, err) => cb(err))
-      return () => ipcRenderer.removeAllListeners(channel)
+      const ch = `claude:stream:error:${id}`
+      ipcRenderer.on(ch, (_, err) => cb(err))
+      return () => ipcRenderer.removeAllListeners(ch)
     },
-
-    // CLI health check — returns { installed, authenticated, version, path, error }
-    status: () => ipcRenderer.invoke('claude:status'),
-
-    // Update the path to the claude binary
+    status:  ()  => ipcRenderer.invoke('claude:status'),
     setPath: (p) => ipcRenderer.invoke('claude:set-path', { path: p }),
-
-    // Attempt to fix common auth issues (clear cache, logout)
-    fixAuth: () => ipcRenderer.invoke('claude:fix-auth'),
+    fixAuth: ()  => ipcRenderer.invoke('claude:fix-auth'),
   },
 
   // ─── System dialogs ──────────────────────────────────────────────────────
   dialog: {
     openFolder: () => ipcRenderer.invoke('dialog:openFolder'),
+  },
+
+  // ─── Filesystem helpers ──────────────────────────────────────────────────
+  fs: {
+    /**
+     * Create ~/Workstation Projects/<projectName>/ on disk.
+     * Returns { success, projectDir }
+     */
+    createProjectDir: (projectName) =>
+      ipcRenderer.invoke('fs:createProjectDir', { projectName }),
+
+    /**
+     * Check whether a directory path exists.
+     * Returns { exists: boolean }
+     */
+    checkDir: (dirPath) =>
+      ipcRenderer.invoke('fs:checkDir', { dirPath }),
+
+    /**
+     * Open a directory in Finder / Explorer.
+     */
+    openInFinder: (dirPath) =>
+      ipcRenderer.invoke('fs:openInFinder', { dirPath }),
   },
 })
