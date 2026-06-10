@@ -5,7 +5,7 @@
   border-radius: 10px;
   cursor: pointer;
   position: relative;
-  overflow: hidden;
+  overflow: visible;        /* allow InlineTerminal to overflow below */
   transition: border-color 0.15s, box-shadow 0.15s;
   user-select: none;
 }
@@ -14,15 +14,15 @@
   border-color: rgba(255,255,255,0.15);
   box-shadow: 0 4px 20px rgba(0,0,0,0.3);
 }
+.node:hover .hintBar { opacity: 1; }
 
 .selected {
   border-color: rgba(0,255,136,0.28);
   box-shadow: 0 0 0 1px rgba(0,255,136,0.12);
 }
 
-/* Active = workspace is open for this node */
 .active {
-  border-color: rgba(0,255,136,0.5) !important;
+  border-color: rgba(0,255,136,0.55) !important;
   box-shadow: 0 0 0 2px rgba(0,255,136,0.18), 0 4px 20px rgba(0,0,0,0.35) !important;
 }
 
@@ -35,6 +35,47 @@
   border-color: rgba(240,192,64,0.3);
   background: rgba(240,192,64,0.03);
 }
+
+/* ── Session dot — floats above the node when terminal is open ── */
+.sessionDot {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent, #00ff88);
+  box-shadow: 0 0 8px rgba(0,255,136,0.9), 0 0 16px rgba(0,255,136,0.4);
+  animation: pulse 2s ease-in-out infinite;
+  z-index: 10;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: translateX(-50%) scale(1); }
+  50%       { opacity: 0.6; transform: translateX(-50%) scale(0.85); }
+}
+
+/* ── Hint bar — appears on hover ── */
+.hintBar {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  background: rgba(10,10,18,0.92);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 10px;
+  color: rgba(255,255,255,0.25);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+  z-index: 10;
+}
+.hintBar span { display: flex; align-items: center; gap: 3px; }
 
 /* Left status bar */
 .statusBar {
@@ -55,7 +96,7 @@
   right: 0;
   height: 2px;
   background: var(--accent, #00ff88);
-  opacity: 0.6;
+  opacity: 0.5;
   border-radius: 0 0 10px 10px;
 }
 
@@ -65,6 +106,8 @@
   flex-direction: column;
   gap: 5px;
   min-height: 64px;
+  overflow: hidden;
+  border-radius: 10px;
 }
 
 .label {
@@ -139,17 +182,17 @@
   border: 1px solid rgba(255,255,255,0.15);
 }
 
-/* Context menu */
+/* ── Context menu ── */
 .menu {
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  z-index: 1000;
+  z-index: 2000;
   background: var(--surface2, #1a1a24);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 4px;
-  min-width: 150px;
+  min-width: 160px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.4);
 }
 
@@ -172,11 +215,11 @@
 .menuItemDanger:hover { background: rgba(248,113,113,0.08); color: rgba(248,113,113,0.9); }
 .menuDivider { height: 1px; background: var(--border); margin: 4px 0; }
 
-/* Block modal */
+/* ── Block modal ── */
 .modalBackdrop {
   position: fixed;
   inset: 0;
-  z-index: 2000;
+  z-index: 9999;
   background: rgba(0,0,0,0.5);
   display: flex;
   align-items: center;
@@ -196,6 +239,7 @@
 .modalInput, .modalSelect {
   background: var(--bg); border: 1px solid var(--border); color: rgba(255,255,255,0.8);
   font-size: 13px; padding: 8px 10px; border-radius: 6px; font-family: inherit; width: 100%;
+  box-sizing: border-box;
 }
 .modalInput:focus, .modalSelect:focus { outline: none; border-color: rgba(0,255,136,0.3); }
 .modalActions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
