@@ -14,8 +14,8 @@ interface CLIStatus {
  *
  * Every element is interactive:
  *  - Project name  → project switcher dropdown
- *  - Stack chip    → project settings inline
- *  - 3/5 progress  → pan canvas to next incomplete node
+ *  - Stack chip    → inline stack editor
+ *  - 3/5 progress  → jumps canvas to next incomplete node
  *  - ● Claude      → CLI diagnostics panel
  *
  * Global token health bar: aggregates all open chat sessions.
@@ -26,7 +26,6 @@ const TOKEN_WARN = 40_000
 const TOKEN_CRIT = 80_000
 
 function estimateTokens(msgs: { content: string }[]): number {
-  // ~4 chars per token + ~700 overhead for system prompt + context block
   return msgs.reduce((sum, m) => sum + Math.ceil(m.content.length / 4), 700)
 }
 
@@ -39,15 +38,16 @@ export default function ElectronHeader() {
 
   const { sessions } = useChatSessionsStore()
 
-  const [cli, setCli]                 = useState<CLIStatus | null>(null)
-  const [showSwitcher, setShowSwitcher] = useState(false)
+  const [cli, setCli]                    = useState<CLIStatus | null>(null)
+  const [showSwitcher, setShowSwitcher]   = useState(false)
   const [showDiagnostics, setShowDiagnostics] = useState(false)
-  const [showSettings, setShowSettings] = useState(false)
-  const [stackEdit, setStackEdit]     = useState('')
-  const [diagnostics, setDiagnostics] = useState<string | null>(null)
+  const [showSettings, setShowSettings]    = useState(false)
+  const [stackEdit, setStackEdit]          = useState('')
+  const [diagnostics, setDiagnostics]      = useState<string | null>(null)
 
   const switcherRef    = useRef<HTMLDivElement>(null)
   const diagnosticsRef = useRef<HTMLDivElement>(null)
+  const settingsRef    = useRef<HTMLDivElement>(null)
 
   // Check CLI on mount
   useEffect(() => {
@@ -59,18 +59,18 @@ export default function ElectronHeader() {
   // Close dropdowns on outside click
   useEffect(() => {
     function handler(e: MouseEvent) {
-      if (switcherRef.current && !switcherRef.current.contains(e.target as Node)) {
+      if (switcherRef.current && !switcherRef.current.contains(e.target as Node))
         setShowSwitcher(false)
-      }
-      if (diagnosticsRef.current && !diagnosticsRef.current.contains(e.target as Node)) {
+      if (diagnosticsRef.current && !diagnosticsRef.current.contains(e.target as Node))
         setShowDiagnostics(false)
-      }
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node))
+        setShowSettings(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  // Section progress
+  // Section stats
   const sections = nodes.filter(n => n.data.kind === 'section')
   const done     = sections.filter(n => n.data.status === 'done').length
   const total    = sections.length
@@ -85,7 +85,7 @@ export default function ElectronHeader() {
     ? 'unauthed'
     : 'ok'
 
-  // Global token health — aggregate across all open sessions
+  // Global token health
   const tokenHealths = Object.keys(sessions).map(nodeId => {
     const node = nodes.find(n => n.id === nodeId)
     if (!node) return 0
@@ -93,24 +93,23 @@ export default function ElectronHeader() {
   })
   const maxTokens   = Math.max(0, ...tokenHealths)
   const tokenState  = maxTokens > TOKEN_CRIT ? 'crit' : maxTokens > TOKEN_WARN ? 'warn' : 'ok'
-  const hasOpenSessions = Object.keys(sessions).length > 0
+  const hasSessions = Object.keys(sessions).length > 0
 
-  // Jump to next incomplete node
+  // ── Actions ──────────────────────────────────────────────────────────────
+
   function jumpToNext() {
     const next = sections.find(n => n.data.status !== 'done')
     if (next) {
       setActiveNode(next.id)
-      // Emit a canvas-focus event that the canvas listens for
       window.dispatchEvent(new CustomEvent('workstation:focusNode', { detail: { id: next.id } }))
     }
   }
 
-  // Run diagnostics
   async function runDiagnostics() {
     setDiagnostics('Running…')
     const api = (window as any).electron
     if (!api?.claude?.diagnose) {
-      setDiagnostics('Diagnostics not available in this build.')
+      setDiagnostics('Diagnostics not available in browser mode.\nRun the Electron app for full diagnostics.')
       return
     }
     try {
@@ -121,15 +120,18 @@ export default function ElectronHeader() {
     }
   }
 
+  // ── Render ───────────────────────────────────────────────────────────────
+
   return (
     <header className={styles.header}>
-      {/* Traffic light zone */}
+
+      {/* Traffic light zone — Electron native window controls */}
       <div className={styles.trafficLightZone} />
 
-      {/* ── Project name → switcher ── */}
-      <div className={styles.projectBlock} ref={switcherRef}>
+      {/* ── Project name → drop-down switch ── */}
+      <div ref={switcherRef} style={{ position: 'relative' }}>
         <button
-          className={styles.projectBtn}
+          className={`${styles.interactive} ${styles.projectBtn}`}
           onClick={() => setShowSwitcher(v => !v)}
           title="Switch project"
         >
@@ -156,9 +158,9 @@ export default function ElectronHeader() {
         )}
       </div>
 
-      {/* ── Stack chip → project settings ── */}
-      {project?.stack && (
-        <div className={styles.settingsBlock}>
+      {/* ── Stack chip → inline editor ── */}
+      {project && (
+        <div ref={settingsRef} style={{ position: 'relative' }}>
           {showSettings ? (
             <div className={styles.stackEditWrap}>
               <input
@@ -177,22 +179,31 @@ export default function ElectronHeader() {
                 placeholder="e.g. Next.js + Supabase"
               />
             </div>
-          ) : (
+          ) : project.stack ? (
             <button
-              className={styles.chip}
+              className={`${styles.interactive} ${styles.chip}`}
               onClick={() => { setStackEdit(project.stack ?? ''); setShowSettings(true) }}
               title="Edit stack"
             >
               {project.stack}
             </button>
+          ) : (
+            <button
+              className={`${styles.interactive} ${styles.chip}`}
+              onClick={() => { setStackEdit(''); setShowSettings(true) }}
+              title="Set project stack"
+              style={{ opacity: 0.3, fontStyle: 'italic' }}
+            >
+              + stack
+            </button>
           )}
         </div>
       )}
 
-      {/* ── Progress → jump to next node ── */}
+      {/* ── Progress → jump to next undoned node ── */}
       {total > 0 && (
         <button
-          className={styles.progressBlock}
+          className={`${styles.interactive} ${styles.progressBtn}`}
           onClick={jumpToNext}
           title="Jump to next incomplete section"
         >
@@ -204,23 +215,29 @@ export default function ElectronHeader() {
           </div>
           <span className={styles.progressText}>
             {done}/{total}
-            {blocked > 0 && <span className={styles.blockedDot}> · {blocked} blocked</span>}
-            {active > 0 && blocked === 0 && <span className={styles.activeDot}> · {active} active</span>}
+            {blocked > 0 && <> · <span className={styles.blockedDot}>{blocked} blocked</span></>}
+            {active > 0 && blocked === 0 && <> · <span className={styles.activeDot}>{active} active</span></>}
           </span>
         </button>
       )}
 
       {/* ── Global token health ── */}
-      {hasOpenSessions && (
+      {hasSessions && (
         <div
           className={`${styles.tokenHealth} ${styles[`token_${tokenState}`]}`}
-          title={`Context health: ${maxTokens.toLocaleString()} est. tokens across open sessions`}
+          title={
+            tokenState === 'crit'
+              ? '⚠ One or more sessions are past 80k tokens. End a session to start fresh.'
+              : tokenState === 'warn'
+              ? `~${Math.round(maxTokens / 1000)}k tokens across open sessions`
+              : 'Context health good'
+          }
         >
           <span className={`${styles.tokenDot} ${tokenState === 'crit' ? styles.tokenPulse : ''}`} />
           <span className={styles.tokenLabel}>
-            {tokenState === 'ok'   && 'Context ok'}
-            {tokenState === 'warn' && 'Context filling'}
-            {tokenState === 'crit' && 'Start fresh session'}
+            {tokenState === 'ok'   && 'Context OK'}
+            {tokenState === 'warn' && 'Filling up'}
+            {tokenState === 'crit' && '⚠ Start fresh'}
           </span>
         </div>
       )}
@@ -230,14 +247,14 @@ export default function ElectronHeader() {
         <button
           className={styles.cliBtn}
           onClick={() => { setShowDiagnostics(v => !v); if (!diagnostics) runDiagnostics() }}
-          title="Claude CLI status — click for diagnostics"
+          title="Claude CLI diagnostics"
         >
-          <span className={`${styles.cliDot} ${styles[cliState]}`} />
+          <span className={`${styles.cliDot} ${styles[`cliDot_${cliState}`]}`} />
           <span className={styles.cliLabel}>
             {cliState === 'checking'  && 'Checking…'}
             {cliState === 'missing'   && 'CLI missing'}
             {cliState === 'unauthed'  && 'Not logged in'}
-            {cliState === 'ok'        && `Claude ${cli?.version ?? 'CLI'}`}
+            {cliState === 'ok'        && `Claude ${cli?.version ?? ''}`}
           </span>
         </button>
 
@@ -247,15 +264,13 @@ export default function ElectronHeader() {
             <pre className={styles.diagnosticsOutput}>
               {diagnostics ?? 'Loading…'}
             </pre>
-            <button
-              className={styles.diagnosticsRefresh}
-              onClick={runDiagnostics}
-            >
+            <button className={styles.diagnosticsRefresh} onClick={runDiagnostics}>
               ↺ Refresh
             </button>
           </div>
         )}
       </div>
+
     </header>
   )
 }
