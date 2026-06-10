@@ -1,0 +1,126 @@
+/* The header sits at the very top of the window.
+   -webkit-app-region: drag makes the whole bar draggable like a native titlebar.
+   Individual interactive children must set -webkit-app-region: no-drag. */
+
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px 0 0;
+  background: #08080e;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+/* Traffic light zone — 80px wide, accounts for close/minimize/maximize at x:16 */
+.trafficLightZone {
+  width: 80px;
+  min-width: 80px;
+  height: 100%;
+  -webkit-app-region: drag;
+}
+
+/* All interactive children must not be draggable */
+.projectBlock,
+.progressBlock,
+.cliBlock {
+  -webkit-app-region: no-drag;
+}
+
+/* ── Project ── */
+.projectBlock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.projectName {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.noProject {
+  font-size: 13px;
+  color: rgba(255,255,255,0.25);
+}
+
+.chip {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.07);
+  color: rgba(255,255,255,0.45);
+  white-space: nowrap;
+}
+
+/* ── Progress ── */
+.progressBlock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  max-width: 220px;
+}
+
+.progressBar {
+  flex: 1;
+  height: 3px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--accent, #00ff88);
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+
+.progressText {
+  font-size: 11px;
+  color: rgba(255,255,255,0.35);
+  white-space: nowrap;
+}
+
+.blockedDot { color: #f0c040; }
+.activeDot  { color: var(--accent, #00ff88); }
+
+/* ── CLI Status ── */
+.cliBlock {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cliDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.cliDot.checking  { background: rgba(255,255,255,0.2); }
+.cliDot.missing   { background: #f05050; }
+.cliDot.unauthed  { background: #f0c040; }
+.cliDot.ok        { background: #00ff88; box-shadow: 0 0 6px rgba(0,255,136,0.5); }
+
+.cliLabel {
+  font-size: 11px;
+  color: rgba(255,255,255,0.35);
+  white-space: nowrap;
+}
