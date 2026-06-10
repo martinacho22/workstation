@@ -2,20 +2,28 @@ import { memo, useState } from 'react'
 import { Handle, Position, NodeProps } from '@xyflow/react'
 import { WorkstationNodeData } from '@/types'
 import { useWorkstationStore } from '@/store/useWorkstationStore'
+import InlineTerminal from './InlineTerminal'
 import styles from './SectionNode.module.css'
 
 function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
-  const { setActiveNode, updateNodeStatus, deleteNode, renameNode, nodes, activeNodeId } =
+  const { updateNodeStatus, deleteNode, renameNode, nodes, activeNodeId, setActiveNode } =
     useWorkstationStore()
 
-  const [renaming, setRenaming]           = useState(false)
-  const [renameVal, setRenameVal]         = useState(data.label)
-  const [showMenu, setShowMenu]           = useState(false)
+  const [renaming, setRenaming]             = useState(false)
+  const [renameVal, setRenameVal]           = useState(data.label)
+  const [showMenu, setShowMenu]             = useState(false)
   const [showBlockModal, setShowBlockModal] = useState(false)
-  const [blockReason, setBlockReason]     = useState('')
-  const [blockBy, setBlockBy]             = useState('')
+  const [blockReason, setBlockReason]       = useState('')
+  const [blockBy, setBlockBy]               = useState('')
 
+  // Terminal state — per node, lives on the canvas
+  const [terminalOpen, setTerminalOpen]     = useState(false)
+
+  // isActive = this node is the active chat node (FloatingChatCard is open for it)
   const isActive      = activeNodeId === id
+  // hasSession = this node has an open terminal (accent dot shown)
+  const hasSession    = terminalOpen
+
   const sectionNodes  = nodes.filter(n => n.id !== id && (n.data.kind === 'section' || n.data.kind === 'overview'))
   const messageCount  = data.chatHistory?.length ?? 0
   const hasHandoff    = !!data.handoffDoc
@@ -26,6 +34,28 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
     renameNode(id, renameVal)
     setRenaming(false)
   }
+
+  // Single click → open FloatingChatCard for this node
+  function handleClick(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (showMenu) { setShowMenu(false); return }
+    // Toggle active chat node
+    setActiveNode(isActive ? null : id)
+  }
+
+  // Double click → open inline terminal
+  function handleDoubleClick(e: React.MouseEvent) {
+    e.stopPropagation()
+    setTerminalOpen(v => !v)
+    // Also mark as active so chat opens too
+    if (!isActive) setActiveNode(id)
+  }
+
+  const statusColor =
+    data.status === 'done'    ? 'var(--done, #4ade80)' :
+    data.status === 'blocked' ? '#f0c040' :
+    data.status === 'active'  ? 'var(--accent)' :
+    'rgba(255,255,255,0.12)'
 
   function handleMarkBlocked() {
     if (!blockReason.trim()) return
@@ -39,19 +69,6 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
     setBlockBy('')
   }
 
-  // Single click → open workspace (or close if already open for this node)
-  function handleClick(e: React.MouseEvent) {
-    e.stopPropagation()
-    if (showMenu) { setShowMenu(false); return }
-    setActiveNode(isActive ? null : id)
-  }
-
-  const statusColor =
-    data.status === 'done'    ? 'var(--done, #4ade80)' :
-    data.status === 'blocked' ? '#f0c040' :
-    data.status === 'active'  ? 'var(--accent)' :
-    'rgba(255,255,255,0.12)'
-
   return (
     <>
       <div
@@ -63,6 +80,7 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
           data.status === 'blocked' ? styles.blocked : '',
         ].join(' ')}
         onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
         onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setShowMenu(v => !v) }}
       >
         <Handle type="target" position={Position.Left}  className={styles.handle} />
@@ -70,6 +88,14 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
 
         {/* Left status bar */}
         <div className={styles.statusBar} style={{ background: statusColor }} />
+
+        {/* Session dot — shown above node when terminal is open */}
+        {hasSession && (
+          <div
+            className={styles.sessionDot}
+            title="Claude Code session open — double-click to toggle"
+          />
+        )}
 
         <div className={styles.body}>
           {/* Label */}
@@ -90,9 +116,8 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
             <div
               className={styles.label}
               onDoubleClick={e => {
+                // Handled by node's onDoubleClick — don't rename on body dbl-click
                 e.stopPropagation()
-                setRenameVal(data.label)
-                setRenaming(true)
               }}
             >
               {data.label}
@@ -125,11 +150,22 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
                   handoff
                 </span>
               )}
+              {terminalOpen && (
+                <span className={styles.metaChip} style={{ color: 'var(--accent)', borderColor: 'rgba(0,255,136,0.35)', background: 'rgba(0,255,136,0.06)' }}>
+                  ⌘ live
+                </span>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Active indicator strip at bottom */}
+        {/* Hint bar at bottom — shows on hover */}
+        <div className={styles.hintBar}>
+          <span>click → chat</span>
+          <span>dbl-click → terminal</span>
+        </div>
+
+        {/* Active indicator strip */}
         {isActive && <div className={styles.activeBar} />}
 
         {/* Context menu */}
@@ -154,15 +190,26 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
                 Unblock
               </button>
             )}
+            <button className={styles.menuItem} onClick={() => { setTerminalOpen(v => !v); setShowMenu(false) }}>
+              {terminalOpen ? 'Close terminal' : 'Open terminal'}
+            </button>
             <div className={styles.menuDivider} />
             <button className={`${styles.menuItem} ${styles.menuItemDanger}`} onClick={() => { deleteNode(id); setShowMenu(false) }}>
               Delete
             </button>
           </div>
         )}
+
+        {/* Inline terminal — spawns below node, stays on canvas */}
+        {terminalOpen && (
+          <InlineTerminal
+            nodeId={id}
+            onClose={() => setTerminalOpen(false)}
+          />
+        )}
       </div>
 
-      {/* Block modal */}
+      {/* Block modal — outside node div so it covers full screen */}
       {showBlockModal && (
         <div className={styles.modalBackdrop} onClick={() => setShowBlockModal(false)}>
           <div className={styles.modal} onClick={e => e.stopPropagation()}>
