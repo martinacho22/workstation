@@ -14,93 +14,94 @@ import {
 import { nanoid } from 'nanoid'
 import { runClaude } from '@/lib/claudeRunner'
 import { CanvasCommand } from '@/lib/intentParser'
+import { runCriticPass, runLayoutPass } from '@/lib/layoutEngine'
 
 // ─── State Shape ──────────────────────────────────────────────────────────────
 
 interface WorkstationState {
   // Multi-project registry
-  projects: Project[]
-  activeProjectId: string | null
-  createProject: (p: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string>
-  switchProject: (id: string) => void
-  deleteProject: (id: string) => void
-  getProjectMetas: () => ProjectMeta[]
+  projects:         Project[]
+  activeProjectId:  string | null
+  createProject:    (p: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string>
+  switchProject:    (id: string) => void
+  deleteProject:    (id: string) => void
+  getProjectMetas:  () => ProjectMeta[]
 
   // Active project
-  project: Project | null
-  setProject: (p: Project) => void
+  project:       Project | null
+  setProject:    (p: Project) => void
   updateProject: (patch: Partial<Project>) => void
 
   // Grill Me
-  grillLoading: boolean
+  grillLoading:  boolean
   grillQuestion: string | null
-  grillAnswers: GrillAnswer[]
-  startGrill: (idea: string) => Promise<void>
-  answerGrill: (answer: string) => Promise<void>
-  finishGrill: () => void
+  grillAnswers:  GrillAnswer[]
+  startGrill:    (idea: string) => Promise<void>
+  answerGrill:   (answer: string) => Promise<void>
+  finishGrill:   () => void
 
-  // Blueprint
-  blueprintLoading: boolean
-  blueprintError: string | null
-  generateBlueprint: () => Promise<void>
-  applyBlueprint: (sections: BlueprintSection[]) => void
+  // Blueprint — now a 3-pass pipeline
+  blueprintLoading:   boolean
+  blueprintPhase:     'idle' | 'generating' | 'critiquing' | 'laying-out' | 'done'
+  blueprintCritique:  string | null
+  blueprintError:     string | null
+  generateBlueprint:  () => Promise<void>
+  applyBlueprint:     (sections: BlueprintSection[], positions?: { label: string; x: number; y: number }[]) => void
 
   // Canvas
-  nodes: Node<WorkstationNodeData>[]
-  edges: Edge[]
-  onNodesChange: (changes: NodeChange[]) => void
-  onEdgesChange: (changes: EdgeChange[]) => void
-  addSectionNode: (label: string, position?: { x: number; y: number }, description?: string) => string
-  updateNodeStatus: (id: string, status: WorkstationNodeData['status'], blockedReason?: BlockedReason) => void
-  deleteNode: (id: string) => void
-  renameNode: (id: string, label: string) => void
+  nodes:             Node<WorkstationNodeData>[]
+  edges:             Edge[]
+  onNodesChange:     (changes: NodeChange[]) => void
+  onEdgesChange:     (changes: EdgeChange[]) => void
+  addSectionNode:    (label: string, position?: { x: number; y: number }, description?: string) => string
+  updateNodeStatus:  (id: string, status: WorkstationNodeData['status'], blockedReason?: BlockedReason) => void
+  deleteNode:        (id: string) => void
+  renameNode:        (id: string, label: string) => void
+  executeCommands:   (commands: CanvasCommand[]) => void
 
-  // ── NEW: execute canvas commands from intent parser ──────────────────────
-  executeCommands: (commands: CanvasCommand[]) => void
-
-  // Session (active work view)
-  activeNodeId: string | null
-  setActiveNode: (id: string | null) => void
-  addChatMessage: (nodeId: string, msg: ChatMessage) => void
-  endSession: (nodeId: string) => Promise<void>
-  sessionLoading: boolean
+  // Session
+  activeNodeId:    string | null
+  setActiveNode:   (id: string | null) => void
+  addChatMessage:  (nodeId: string, msg: ChatMessage) => void
+  endSession:      (nodeId: string) => Promise<void>
+  sessionLoading:  boolean
 
   // Context
-  buildProjectContext: (nodeId?: string) => ProjectContext
+  buildProjectContext:  (nodeId?: string) => ProjectContext
   generateContextBlock: (nodeId: string) => string
 
-  // Handoff docs (auto-generated on session end)
+  // Handoff
   generateHandoffDoc: (nodeId: string) => Promise<void>
-  updateHandoffDoc: (nodeId: string, doc: HandoffDoc) => void
+  updateHandoffDoc:   (nodeId: string, doc: HandoffDoc) => void
 
-  // Bugs (project-level list, not nodes)
-  addBug: (description: string, affectedSection: string) => void
-  fixBug: (id: string) => void
+  // Bugs
+  addBug:    (description: string, affectedSection: string) => void
+  fixBug:    (id: string) => void
   deleteBug: (id: string) => void
 
-  // Session decisions (logged during work)
-  addDecision: (decision: string, reason: string, sectionId: string) => void
+  // Decisions
+  addDecision:    (decision: string, reason: string, sectionId: string) => void
   deleteDecision: (id: string) => void
 
-  // Architecture Decision Records
-  addAdr: (title: string, decision: string, reason: string) => void
+  // ADRs
+  addAdr:    (title: string, decision: string, reason: string) => void
   deleteAdr: (id: string) => void
 
   // Export
   exportHandoff: () => string
 
   // Claude CLI
-  claudeCliPath: string
+  claudeCliPath:    string
   setClaudeCliPath: (p: string) => void
 }
 
 // ─── Node Factory ─────────────────────────────────────────────────────────────
 
 function makeNode(
-  kind: WorkstationNodeData['kind'],
-  label: string,
+  kind:     WorkstationNodeData['kind'],
+  label:    string,
   position: { x: number; y: number },
-  extra: Partial<WorkstationNodeData> = {}
+  extra:    Partial<WorkstationNodeData> = {}
 ): Node<WorkstationNodeData> {
   const id = nanoid(8)
   return {
@@ -109,10 +110,10 @@ function makeNode(
     position,
     data: {
       id, kind, label,
-      status: 'idle',
+      status:      'idle',
       chatHistory: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      createdAt:   Date.now(),
+      updatedAt:   Date.now(),
       ...extra,
     },
   }
@@ -130,14 +131,13 @@ export const useWorkstationStore = create<WorkstationState>()(
 
       // ── Multi-project ──────────────────────────────────────────────────────
 
-      projects: [],
+      projects:        [],
       activeProjectId: null,
 
       createProject: async (p) => {
         const id  = nanoid(10)
         const now = Date.now()
 
-        // Create the project directory on disk (~/Workstation Projects/<name>/)
         let projectDir: string | undefined
         try {
           const electronAPI = (window as any).electron
@@ -145,15 +145,10 @@ export const useWorkstationStore = create<WorkstationState>()(
             const result = await electronAPI.fs.createProjectDir(p.name)
             if (result?.success) projectDir = result.projectDir
           }
-        } catch (_) {
-          // Non-fatal — app works without it, just no auto-cwd
-        }
+        } catch (_) {}
 
         const newProject: Project = {
-          ...p,
-          id,
-          createdAt: now,
-          updatedAt: now,
+          ...p, id, createdAt: now, updatedAt: now,
           ...(projectDir ? { projectDir } : {}),
         }
 
@@ -172,13 +167,12 @@ export const useWorkstationStore = create<WorkstationState>()(
 
       switchProject: (id) => {
         const state = get()
-        // Save current canvas
         if (state.activeProjectId) {
           set((s) => {
             const current = s.projects.find(p => p.id === s.activeProjectId)
             if (current) {
-              current.nodes = s.nodes as unknown[]
-              current.edges = s.edges as unknown[]
+              current.nodes    = s.nodes as unknown[]
+              current.edges    = s.edges as unknown[]
               current.updatedAt = Date.now()
             }
           })
@@ -215,7 +209,7 @@ export const useWorkstationStore = create<WorkstationState>()(
       getProjectMetas: () => {
         const { projects, nodes, activeProjectId } = get()
         return projects.map((p) => {
-          const pNodes = p.id === activeProjectId
+          const pNodes   = p.id === activeProjectId
             ? nodes
             : (p.nodes as Node<WorkstationNodeData>[]) ?? []
           const sections = pNodes.filter(n => n.data?.kind === 'section')
@@ -225,23 +219,23 @@ export const useWorkstationStore = create<WorkstationState>()(
           const openBugs = (p.bugs ?? []).filter(b => b.status === 'open').length
 
           let status: ProjectMeta['status'] = 'idle'
-          if (blocked > 0)                                   status = 'blocked'
-          else if (done === total && total > 0)              status = 'done'
-          else if (sections.some(n => n.data?.status === 'active')) status = 'active'
-          else if (total > 0)                                status = 'active'
+          if (blocked > 0)                                              status = 'blocked'
+          else if (done === total && total > 0)                         status = 'done'
+          else if (sections.some(n => n.data?.status === 'active'))     status = 'active'
+          else if (total > 0)                                           status = 'active'
 
           return {
-            id:             p.id,
-            name:           p.name,
-            description:    p.description,
-            stack:          p.stack,
-            repoPath:       p.repoPath,
-            projectDir:     p.projectDir,
-            progress:       total > 0 ? Math.round((done / total) * 100) : 0,
-            sectionsTotal:  total,
-            sectionsDone:   done,
+            id:            p.id,
+            name:          p.name,
+            description:   p.description,
+            stack:         p.stack,
+            repoPath:      p.repoPath,
+            projectDir:    p.projectDir,
+            progress:      total > 0 ? Math.round((done / total) * 100) : 0,
+            sectionsTotal: total,
+            sectionsDone:  done,
             openBugs,
-            lastActive:     p.updatedAt,
+            lastActive:    p.updatedAt,
             status,
           } satisfies ProjectMeta
         })
@@ -265,9 +259,9 @@ export const useWorkstationStore = create<WorkstationState>()(
 
       // ── Grill Me ──────────────────────────────────────────────────────────
 
-      grillLoading: false,
+      grillLoading:  false,
       grillQuestion: null,
-      grillAnswers: [],
+      grillAnswers:  [],
 
       startGrill: async (idea: string) => {
         set((s) => { s.grillLoading = true; s.grillAnswers = [] })
@@ -284,12 +278,13 @@ QUESTION: [your question here]
 RECOMMENDATION: [your recommended answer]`
 
         try {
-          const text = await runClaude(prompt)
+          const text  = await runClaude(prompt)
           const qMatch = text.match(/QUESTION:\s*(.+)/i)
           const rMatch = text.match(/RECOMMENDATION:\s*(.+)/i)
           if (qMatch) {
             set((s) => {
-              s.grillQuestion = qMatch[1].trim() + (rMatch ? `\n\nRecommendation: ${rMatch[1].trim()}` : '')
+              s.grillQuestion = qMatch[1].trim() +
+                (rMatch ? `\n\nRecommendation: ${rMatch[1].trim()}` : '')
               s.grillLoading = false
             })
           }
@@ -299,51 +294,41 @@ RECOMMENDATION: [your recommended answer]`
       },
 
       answerGrill: async (answer: string) => {
-        const state = get()
+        const state          = get()
         const currentQuestion = state.grillQuestion?.split('\n\nRecommendation:')[0] ?? ''
+        const newAnswers      = [...state.grillAnswers, { question: currentQuestion, answer }]
 
-        const newAnswers = [
-          ...state.grillAnswers,
-          { question: currentQuestion, answer },
-        ]
-        set((s) => {
-          s.grillAnswers = newAnswers
-          s.grillLoading = true
-          s.grillQuestion = null
-        })
+        set((s) => { s.grillAnswers = newAnswers; s.grillLoading = true; s.grillQuestion = null })
 
         if (newAnswers.length >= 6) {
           set((s) => { s.grillLoading = false })
-          // Auto-trigger blueprint generation after 6 answers
           get().finishGrill()
           await get().generateBlueprint()
           return
         }
 
-        const historyText = newAnswers
-          .map(a => `Q: ${a.question}\nA: ${a.answer}`)
-          .join('\n\n')
-
+        const historyText = newAnswers.map(a => `Q: ${a.question}\nA: ${a.answer}`).join('\n\n')
         const prompt = `You are a senior software architect interviewing a developer.
 
 Previous Q&A:
 ${historyText}
 
-Based on what you know so far, ask ONE more focused question about the most important remaining unknown.
+Ask ONE more focused question about the most important remaining unknown.
 Don't repeat topics already covered.
-Give your recommended answer in brackets after the question.
+Give your recommended answer.
 
 Format exactly:
 QUESTION: [your question here]
 RECOMMENDATION: [your recommended answer]`
 
         try {
-          const text = await runClaude(prompt)
+          const text  = await runClaude(prompt)
           const qMatch = text.match(/QUESTION:\s*(.+)/i)
           const rMatch = text.match(/RECOMMENDATION:\s*(.+)/i)
           if (qMatch) {
             set((s) => {
-              s.grillQuestion = qMatch[1].trim() + (rMatch ? `\n\nRecommendation: ${rMatch[1].trim()}` : '')
+              s.grillQuestion = qMatch[1].trim() +
+                (rMatch ? `\n\nRecommendation: ${rMatch[1].trim()}` : '')
               s.grillLoading = false
             })
           }
@@ -364,21 +349,36 @@ RECOMMENDATION: [your recommended answer]`
         })
       },
 
-      // ── Blueprint ──────────────────────────────────────────────────────────
-
-      blueprintLoading: false,
-      blueprintError: null,
+      // ── Blueprint — 3-pass pipeline ────────────────────────────────────────
+      //
+      //  Pass 1: Generate initial sections from grill answers
+      //  Pass 2: Critic reviews for stress points, returns amended sections
+      //  Pass 3: Layout engine assigns (x, y) positions as a smart DAG
+      //
+      blueprintLoading:  false,
+      blueprintPhase:    'idle',
+      blueprintCritique: null,
+      blueprintError:    null,
 
       generateBlueprint: async () => {
         const state = get()
         if (!state.project) return
-        set((s) => { s.blueprintLoading = true; s.blueprintError = null })
+
+        set((s) => {
+          s.blueprintLoading = true
+          s.blueprintPhase   = 'generating'
+          s.blueprintError   = null
+          s.blueprintCritique = null
+        })
 
         const grillContext = state.grillAnswers.length > 0
           ? `\n\nRequirements clarified through Q&A:\n${state.grillAnswers.map(a => `- ${a.question}: ${a.answer}`).join('\n')}`
           : ''
 
-        const prompt = `You are a senior software architect. Break this project into logical build sections.
+        // ── Pass 1: Generate ──────────────────────────────────────────────
+        let rawSections: BlueprintSection[]
+        try {
+          const prompt = `You are a senior software architect. Break this project into logical build sections.
 
 Project: "${state.project.name}"
 Description: "${state.project.description}"
@@ -395,40 +395,69 @@ Return ONLY a JSON array (no markdown, no explanation):
 
 Rules:
 - 4-8 sections
-- First section is always "Project Setup" (repo, env, tooling)
-- Each section is a vertical slice — something testable and visible end-to-end
-- Ordered by natural build sequence (foundations first)
+- First section is always "Project Setup"
+- Each section is a vertical slice — something testable end-to-end
+- Ordered so dependencies come before dependants
 - Be specific to the stack: ${state.project.stack}`
 
-        try {
-          const text = await runClaude(prompt)
+          const text  = await runClaude(prompt)
           const match = text.match(/\[[\s\S]*\]/)
           if (!match) throw new Error('No JSON array in response')
-          const sections: BlueprintSection[] = JSON.parse(match[0])
-          get().applyBlueprint(sections)
-          set((s) => { s.blueprintLoading = false })
+          rawSections = JSON.parse(match[0])
         } catch (err) {
           set((s) => {
             s.blueprintLoading = false
-            s.blueprintError = err instanceof Error ? err.message : 'Blueprint failed'
+            s.blueprintPhase   = 'idle'
+            s.blueprintError   = err instanceof Error ? err.message : 'Blueprint failed'
           })
+          return
         }
+
+        // ── Pass 2: Critic ────────────────────────────────────────────────
+        set((s) => { s.blueprintPhase = 'critiquing' })
+        const { sections: reviewedSections, critique } = await runCriticPass(
+          rawSections,
+          state.project.name,
+          state.project.stack,
+        )
+        set((s) => { s.blueprintCritique = critique })
+
+        // ── Pass 3: Layout ────────────────────────────────────────────────
+        set((s) => { s.blueprintPhase = 'laying-out' })
+        const positions = await runLayoutPass(reviewedSections)
+
+        // ── Apply ─────────────────────────────────────────────────────────
+        get().applyBlueprint(reviewedSections, positions)
+        set((s) => {
+          s.blueprintLoading = false
+          s.blueprintPhase   = 'done'
+        })
       },
 
-      applyBlueprint: (sections: BlueprintSection[]) => {
+      applyBlueprint: (sections, positions) => {
         const store = get()
-        if (store.project) {
-          set((s) => { if (s.project) s.project.blueprint = sections })
-        }
-        // Clear existing section nodes first, keep overview
+
+        // Save blueprint to project
         set((s) => {
+          if (s.project) s.project.blueprint = sections
+          // Clear existing section nodes
           s.nodes = s.nodes.filter(n => n.data.kind === 'overview')
           s.edges = []
         })
+
+        // Build a position map from layout pass
+        const posMap = new Map<string, { x: number; y: number }>()
+        if (positions) {
+          for (const p of positions) posMap.set(p.label, { x: p.x, y: p.y })
+        }
+
+        // Fallback sequential positions
         sections.forEach((section, i) => {
-          store.addSectionNode(section.label, { x: 600 + i * 520, y: 300 }, section.description)
+          const pos = posMap.get(section.label) ?? { x: 600 + i * 360, y: 300 }
+          store.addSectionNode(section.label, pos, section.description)
         })
-        // Wire edges based on dependsOn
+
+        // Wire dependency edges
         const state = get()
         sections.forEach((section) => {
           if (section.dependsOn?.length > 0) {
@@ -436,15 +465,20 @@ Rules:
               const fromNode = state.nodes.find(n => n.data.label === depLabel)
               const toNode   = state.nodes.find(n => n.data.label === section.label)
               if (fromNode && toNode) {
-                set((s) => {
-                  s.edges.push({
-                    id: nanoid(6),
-                    source: fromNode.id,
-                    target: toNode.id,
-                    type: 'flowEdge',
-                    data: { kind: 'flow' },
+                const alreadyExists = state.edges.some(
+                  e => e.source === fromNode.id && e.target === toNode.id
+                )
+                if (!alreadyExists) {
+                  set((s) => {
+                    s.edges.push({
+                      id:     nanoid(6),
+                      source: fromNode.id,
+                      target: toNode.id,
+                      type:   'flowEdge',
+                      data:   { kind: 'flow' },
+                    })
                   })
-                })
+                }
               }
             })
           }
@@ -466,23 +500,11 @@ Rules:
         const { nodes } = get()
         const mainNodes  = nodes.filter(n => n.data.kind === 'section' || n.data.kind === 'overview')
         const rightmost  = mainNodes.reduce((max, n) => Math.max(max, n.position.x), 0)
-        const pos        = position ?? { x: rightmost + 520, y: 300 }
-        const node       = makeNode('section', label, pos, description ? { description } as Partial<WorkstationNodeData> : {})
-        const lastSection = nodes.filter(n => n.data.kind === 'section').slice(-1)[0]
+        const pos        = position ?? { x: rightmost + 360, y: 300 }
+        const node       = makeNode('section', label, pos,
+          description ? { description } as Partial<WorkstationNodeData> : {})
 
-        set((s) => {
-          s.nodes.push(node)
-          // Auto-connect to previous section if no explicit depends
-          if (lastSection && !position) {
-            s.edges.push({
-              id: nanoid(6),
-              source: lastSection.id,
-              target: node.id,
-              type: 'flowEdge',
-              data: { kind: 'flow' },
-            })
-          }
-        })
+        set((s) => { s.nodes.push(node) })
         return node.id
       },
 
@@ -512,49 +534,44 @@ Rules:
 
       executeCommands: (commands: CanvasCommand[]) => {
         const store = get()
-
         for (const cmd of commands) {
           switch (cmd.type) {
-
             case 'BLUEPRINT': {
-              // Full blueprint — clear existing sections, place all nodes
               const sections: BlueprintSection[] = cmd.nodes.map(n => ({
-                label: n.label,
+                label:       n.label,
                 description: n.description,
-                dependsOn: n.depends ? [n.depends] : [],
+                dependsOn:   n.depends ? [n.depends] : [],
               }))
+              // Run full 3-pass pipeline async — don't await here
+              set((s) => {
+                if (s.project) s.project.blueprint = sections
+              })
+              // For orchestrator SPAWN via chat, just apply directly (no critic)
               store.applyBlueprint(sections)
-              // Save to project blueprint
-              set((s) => { if (s.project) s.project.blueprint = sections })
               break
             }
-
             case 'SPAWN_NODE': {
-              // Don't duplicate if label already exists
               const exists = store.nodes.some(n => n.data.label === cmd.label)
               if (!exists) {
                 store.addSectionNode(cmd.label, undefined, cmd.description)
-                // If blueprint exists, add to it
                 set((s) => {
                   if (s.project) {
                     if (!s.project.blueprint) s.project.blueprint = []
                     s.project.blueprint.push({
-                      label: cmd.label,
+                      label:       cmd.label,
                       description: cmd.description ?? '',
-                      dependsOn: cmd.depends ? [cmd.depends] : [],
+                      dependsOn:   cmd.depends ? [cmd.depends] : [],
                     })
                   }
                 })
               }
               break
             }
-
             case 'UPDATE_STATUS': {
               const node = store.nodes.find(n => n.data.label === cmd.label)
               if (node) store.updateNodeStatus(node.id, cmd.status)
               break
             }
-
             case 'ADD_EDGE': {
               const fromNode = store.nodes.find(n => n.data.label === cmd.from)
               const toNode   = store.nodes.find(n => n.data.label === cmd.to)
@@ -565,25 +582,19 @@ Rules:
                 if (!alreadyExists) {
                   set((s) => {
                     s.edges.push({
-                      id: nanoid(6),
+                      id:     nanoid(6),
                       source: fromNode.id,
                       target: toNode.id,
-                      type: 'flowEdge',
-                      data: { kind: 'flow' },
+                      type:   'flowEdge',
+                      data:   { kind: 'flow' },
                     })
                   })
                 }
               }
               break
             }
-
             case 'SET_PHASE':
-              // Update project phase label — informational, stored on project
-              set((s) => {
-                if (s.project) {
-                  (s.project as any).currentPhase = cmd.phase
-                }
-              })
+              set((s) => { if (s.project) (s.project as any).currentPhase = cmd.phase })
               break
           }
         }
@@ -591,7 +602,7 @@ Rules:
 
       // ── Session ───────────────────────────────────────────────────────────
 
-      activeNodeId: null,
+      activeNodeId:   null,
       sessionLoading: false,
 
       setActiveNode: (id) => set((s) => { s.activeNodeId = id }),
@@ -613,7 +624,7 @@ Rules:
           const n = s.nodes.find(n => n.id === nodeId)
           if (n) n.data.contextSnapshot = ctx
           s.sessionLoading = false
-          s.activeNodeId = null
+          s.activeNodeId   = null
         })
       },
 
@@ -635,12 +646,10 @@ Rules:
             status:      n.data.status,
             description: project?.blueprint?.find(b => b.label === n.data.label)?.description,
           })),
-          adrs: (project?.adrs ?? []).map(a => ({
-            title: a.title, decision: a.decision, reason: a.reason,
+          adrs:  (project?.adrs ?? []).map(a => ({ title: a.title, decision: a.decision, reason: a.reason })),
+          bugs:  (project?.bugs ?? []).filter(b => b.status === 'open').map(b => ({
+            description: b.description, affectedSection: b.affectedSection, status: b.status,
           })),
-          bugs: (project?.bugs ?? [])
-            .filter(b => b.status === 'open')
-            .map(b => ({ description: b.description, affectedSection: b.affectedSection, status: b.status })),
           currentSection:        currentNode?.data.label,
           currentSectionPurpose: project?.blueprint?.find(b => b.label === currentNode?.data.label)?.description,
           handoffSummary:        currentNode?.data.handoffDoc
@@ -661,7 +670,7 @@ Rules:
 
 ## Working on: ${ctx.currentSection ?? 'Overview'}
 ${ctx.currentSectionPurpose ? `Goal: ${ctx.currentSectionPurpose}` : ''}
-${ctx.handoffSummary ? `Last session: ${ctx.handoffSummary}` : 'First session in this section.'}
+${ctx.handoffSummary ?? 'First session in this section.'}
 
 ## All Sections
 ${ctx.sections.map(s => `[${s.status === 'done' ? 'x' : s.status === 'blocked' ? '!' : ' '}] ${s.label}${s.description ? ' — ' + s.description : ''}`).join('\n')}
@@ -707,11 +716,11 @@ ${recentHistory.map(m => `${m.role === 'user' ? 'Developer' : 'Claude'}: ${m.con
 
 Return ONLY a JSON object:
 {
-  "whatWasBuilt": "1-2 sentences on what was implemented",
-  "decisionsMade": "key technical decisions made this session",
+  "whatWasBuilt":  "1-2 sentences on what was implemented",
+  "decisionsMade": "key technical decisions made",
   "currentStatus": "where things stand right now",
-  "nextSteps": "specific next actions",
-  "filesChanged": ["list", "of", "files"]
+  "nextSteps":     "specific next actions",
+  "filesChanged":  ["list", "of", "files"]
 }`
 
         try {
@@ -741,11 +750,7 @@ Return ONLY a JSON object:
         if (!s.project) return
         if (!s.project.bugs) s.project.bugs = []
         s.project.bugs.push({
-          id: nanoid(6),
-          description,
-          affectedSection,
-          status: 'open',
-          createdAt: Date.now(),
+          id: nanoid(6), description, affectedSection, status: 'open', createdAt: Date.now(),
         })
         s.project.updatedAt = Date.now()
         const idx = s.projects.findIndex(p => p.id === s.project?.id)
@@ -771,13 +776,7 @@ Return ONLY a JSON object:
       addDecision: (decision, reason, sectionId) => set((s) => {
         if (!s.project) return
         if (!s.project.decisions) s.project.decisions = []
-        s.project.decisions.push({
-          id: nanoid(6),
-          decision,
-          reason,
-          sectionId,
-          createdAt: Date.now(),
-        })
+        s.project.decisions.push({ id: nanoid(6), decision, reason, sectionId, createdAt: Date.now() })
         s.project.updatedAt = Date.now()
         const idx = s.projects.findIndex(p => p.id === s.project?.id)
         if (idx >= 0) s.projects[idx] = s.project!
@@ -813,7 +812,7 @@ Return ONLY a JSON object:
       exportHandoff: (): string => {
         const { project, nodes } = get()
         const sections = nodes.filter(n => n.data.kind === 'section')
-        const now = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+        const now      = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 
         let md = `# ${project?.name ?? 'Project'} — Handoff\n_${now}_\n\n`
         md += `**Stack:** ${project?.stack ?? 'Unknown'}  \n`
@@ -836,7 +835,7 @@ Return ONLY a JSON object:
             md += `**Built:** ${d.whatWasBuilt}\n\n`
             md += `**Decisions:** ${d.decisionsMade}\n\n`
             md += `**Status:** ${d.currentStatus}\n\n`
-            if (d.nextSteps) md += `**Next:** ${d.nextSteps}\n\n`
+            if (d.nextSteps)          md += `**Next:** ${d.nextSteps}\n\n`
             if (d.filesChanged?.length) md += `**Files:** ${d.filesChanged.map(f => `\`${f}\``).join(', ')}\n\n`
           }
           md += `---\n\n`
@@ -848,7 +847,6 @@ Return ONLY a JSON object:
           openBugs.forEach(b => { md += `- [${b.affectedSection}] ${b.description}\n` })
           md += '\n'
         }
-
         return md
       },
 
@@ -860,10 +858,9 @@ Return ONLY a JSON object:
         const electronAPI = (window as any).electron
         if (electronAPI?.claude?.setPath) electronAPI.claude.setPath(p || 'claude')
       },
-
     })),
     {
-      name: 'workstation-store-v3',
+      name: 'workstation-store-v4',
       partialize: (s) => ({
         projects:        s.projects,
         activeProjectId: s.activeProjectId,
