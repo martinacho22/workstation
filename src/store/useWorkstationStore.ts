@@ -10,6 +10,7 @@ import {
   HandoffDoc, BlueprintSection, BlockedReason,
   ProjectContext, ArchitectureDecisionRecord,
   Bug, SessionDecision, GrillAnswer,
+  EnvVar,
 } from '@/types'
 import { nanoid } from 'nanoid'
 import { runClaude } from '@/lib/claudeRunner'
@@ -54,6 +55,9 @@ interface WorkstationState {
   onNodesChange:     (changes: NodeChange[]) => void
   onEdgesChange:     (changes: EdgeChange[]) => void
   addSectionNode:    (label: string, position?: { x: number; y: number }, description?: string) => string
+  addDeployNode:     (label: string, target?: string, position?: { x: number; y: number }) => string
+  addEnvVar:         (nodeId: string, key: string) => void
+  updateEnvVar:      (nodeId: string, key: string, value: string) => void
   updateNodeStatus:  (id: string, status: WorkstationNodeData['status'], blockedReason?: BlockedReason) => void
   deleteNode:        (id: string) => void
   renameNode:        (id: string, label: string) => void
@@ -106,7 +110,7 @@ function makeNode(
   const id = nanoid(8)
   return {
     id,
-    type: kind === 'overview' ? 'overviewNode' : 'sectionNode',
+    type: kind === 'overview' ? 'overviewNode' : kind === 'deploy' ? 'deployNode' : 'sectionNode',
     position,
     data: {
       id, kind, label,
@@ -508,6 +512,43 @@ Rules:
         return node.id
       },
 
+      addDeployNode: (label, target, position) => {
+        const { nodes } = get()
+        const mainNodes  = nodes.filter(n => n.data.kind !== 'overview' || n.data.kind === 'section')
+        const rightmost  = mainNodes.reduce((max, n) => Math.max(max, n.position.x), 0)
+        const pos        = position ?? { x: rightmost + 360, y: 500 }
+        const node       = makeNode('deploy', label, pos, {
+          deployTarget: target ?? 'vercel',
+          envVars: [],
+        } as Partial<WorkstationNodeData>)
+
+        set((s) => { s.nodes.push(node) })
+        return node.id
+      },
+
+      addEnvVar: (nodeId, key) => set((s) => {
+        const node = s.nodes.find(n => n.id === nodeId)
+        if (!node) return
+        const envVars: EnvVar[] = (node.data.envVars as EnvVar[]) ?? []
+        if (envVars.some(v => v.key === key)) return
+        envVars.push({ key, value: '', isSet: false })
+        node.data.envVars = envVars
+        node.data.updatedAt = Date.now()
+      }),
+
+      updateEnvVar: (nodeId, key, value) => set((s) => {
+        const node = s.nodes.find(n => n.id === nodeId)
+        if (!node) return
+        const envVars: EnvVar[] = (node.data.envVars as EnvVar[]) ?? []
+        const existing = envVars.find(v => v.key === key)
+        if (existing) {
+          existing.value = value
+          existing.isSet = value.length > 0
+        }
+        node.data.envVars = envVars
+        node.data.updatedAt = Date.now()
+      }),
+
       updateNodeStatus: (id, status, blockedReason) =>
         set((s) => {
           const node = s.nodes.find(n => n.id === id)
@@ -564,6 +605,13 @@ Rules:
                     })
                   }
                 })
+              }
+              break
+            }
+            case 'SPAWN_DEPLOY_NODE': {
+              const exists = store.nodes.some(n => n.data.label === cmd.label)
+              if (!exists) {
+                store.addDeployNode(cmd.label, cmd.target)
               }
               break
             }
@@ -811,7 +859,7 @@ Return ONLY a JSON object:
 
       exportHandoff: (): string => {
         const { project, nodes } = get()
-        const sections = nodes.filter(n => n.data.kind === 'section')
+        const sections = nodes.filter(n => n.data.kind === 'section' || n.data.kind === 'deploy')
         const now      = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 
         let md = `# ${project?.name ?? 'Project'} — Handoff\n_${now}_\n\n`
