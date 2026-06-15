@@ -7,8 +7,8 @@ interface Props {
 }
 
 export default function Toolbar({ onNewProject }: Props) {
-  const { project, addSectionNode, nodes } = useWorkstationStore()
-  const [showInput, setShowInput] = useState(false)
+  const { project, addSectionNode, addDeployNode, nodes } = useWorkstationStore()
+  const [showInput, setShowInput] = useState<'section' | 'deploy' | false>(false)
   const [newName, setNewName] = useState('')
 
   const sections = nodes.filter(n => n.data.kind === 'section')
@@ -18,9 +18,18 @@ export default function Toolbar({ onNewProject }: Props) {
 
   function handleAdd() {
     if (!newName.trim()) return
-    addSectionNode(newName.trim())
+    if (showInput === 'deploy') {
+      addDeployNode(newName.trim())
+    } else {
+      addSectionNode(newName.trim())
+    }
     setNewName('')
     setShowInput(false)
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter') handleAdd()
+    if (e.key === 'Escape') { setShowInput(false); setNewName('') }
   }
 
   if (!project) {
@@ -58,21 +67,23 @@ export default function Toolbar({ onNewProject }: Props) {
             <input
               autoFocus
               className={styles.input}
-              placeholder="Section name..."
+              placeholder={showInput === 'deploy' ? 'Deploy name...' : 'Section name...'}
               value={newName}
               onChange={e => setNewName(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') handleAdd()
-                if (e.key === 'Escape') { setShowInput(false); setNewName('') }
-              }}
+              onKeyDown={handleKeyDown}
             />
             <button className={styles.confirmBtn} onClick={handleAdd}>Add</button>
             <button className={styles.cancelBtn} onClick={() => { setShowInput(false); setNewName('') }}>Cancel</button>
           </div>
         ) : (
-          <button className={styles.btn} onClick={() => setShowInput(true)}>
-            + Section
-          </button>
+          <>
+            <button className={styles.btn} onClick={() => setShowInput('section')}>
+              + Section
+            </button>
+            <button className={styles.btn} onClick={() => setShowInput('deploy')}>
+              + Deploy
+            </button>
+          </>
         )}
       </div>
     </div>
