@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { useWorkstationStore } from '@/store/useWorkstationStore'
 import { WorkstationNodeData, DeployTarget } from '@/types'
-import NodeHeader from './NodeHeader'
 import ChatPane from '../panes/ChatPane'
 import styles from './DeployNode.module.css'
 
@@ -51,9 +50,9 @@ export default function DeployNode({ data, id }: Props) {
   const [checked, setChecked] = useState<Record<string, boolean>>({})
   const [newKey, setNewKey] = useState('')
 
-  const target = data.deployTarget || 'vercel'
+  const target = (data.deployTarget as DeployTarget) || 'vercel'
   const commands = PLATFORM_COMMANDS[target]
-  const envVars = data.envVars || []
+  const envVars = (data.envVars as Array<{ key: string; value: string; isSet: boolean }>) ?? []
   const allEnvSet = envVars.every(v => v.isSet)
   const preflightDone = Object.values(checked).filter(Boolean).length === PREFLIGHT_ITEMS.length
 
@@ -82,16 +81,54 @@ export default function DeployNode({ data, id }: Props) {
     <div className={`${styles.node} ${data.status === 'done' ? styles.done : ''}`}>
       <Handle type="target" position={Position.Left} className={styles.handle} />
 
-      <NodeHeader id={id} data={data} />
+      {/* Inline header — replaces deleted NodeHeader */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '10px 14px',
+        borderBottom: '1px solid var(--border, rgba(255,255,255,0.06))',
+      }}>
+        <span style={{ fontSize: 13 }}>🚀</span>
+        <span style={{
+          flex: 1,
+          fontSize: 12,
+          fontWeight: 600,
+          color: 'var(--text, #e0e0e8)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}>
+          {data.label}
+        </span>
+        <span style={{
+          fontSize: 10,
+          padding: '2px 6px',
+          borderRadius: 4,
+          background: data.status === 'done'
+            ? 'rgba(74,222,128,0.12)'
+            : data.status === 'blocked'
+              ? 'rgba(240,192,64,0.12)'
+              : 'rgba(255,255,255,0.04)',
+          color: data.status === 'done'
+            ? '#4ade80'
+            : data.status === 'blocked'
+              ? '#f0c040'
+              : 'var(--text-muted, rgba(255,255,255,0.3))',
+          textTransform: 'capitalize',
+        }}>
+          {data.status}
+        </span>
+      </div>
 
       {data.deployUrl && (
         <a
-          href={data.deployUrl}
+          href={data.deployUrl as string}
           target="_blank"
           rel="noopener noreferrer"
           className={styles.liveUrl}
         >
-          {data.deployUrl}
+          {data.deployUrl as string}
         </a>
       )}
 
