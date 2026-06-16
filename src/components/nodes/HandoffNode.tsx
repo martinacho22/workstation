@@ -1,11 +1,16 @@
 import { memo, useState } from 'react'
 import { Handle, Position, NodeProps } from '@xyflow/react'
 import { WorkstationNodeData } from '@/types'
+import { useWorkstationStore } from '@/store/useWorkstationStore'
 import styles from './HandoffNode.module.css'
 
-function HandoffNode({ data }: NodeProps<WorkstationNodeData>) {
+function HandoffNode({ id, data }: NodeProps<WorkstationNodeData>) {
   const [expanded, setExpanded] = useState(false)
+  const { getDependencies, getDependants } = useWorkstationStore()
   const doc = data.handoffDoc
+
+  const deps       = getDependencies(id)
+  const dependants = getDependants(id)
 
   if (!doc) return null
 
@@ -30,8 +35,26 @@ function HandoffNode({ data }: NodeProps<WorkstationNodeData>) {
 
       {expanded && (
         <div className={styles.body}>
+          {/* Dependency info */}
+          {deps.length > 0 && (
+            <div className={styles.field}>
+              <span className={styles.fieldLabel}>Depends on</span>
+              <p className={styles.fieldValue}>
+                {deps.map(d => `${d.data.label} (${d.data.status})`).join(', ')}
+              </p>
+            </div>
+          )}
+          {dependants.length > 0 && (
+            <div className={styles.field}>
+              <span className={styles.fieldLabel}>Blocks</span>
+              <p className={styles.fieldValue}>
+                {dependants.map(d => d.data.label).join(', ')}
+              </p>
+            </div>
+          )}
+
           <Field label="What was built" value={doc.whatWasBuilt} />
-          <Field label="Decisions made"  value={doc.decisionsMAde} />
+          <Field label="Decisions made"  value={doc.decisionsMade} />
           <Field label="Current status"  value={doc.currentStatus} />
           <Field label="Next steps"      value={doc.nextSteps} />
           {doc.filesChanged?.length > 0 && (
@@ -43,9 +66,6 @@ function HandoffNode({ data }: NodeProps<WorkstationNodeData>) {
                 ))}
               </ul>
             </div>
-          )}
-          {doc.tangentsSummary && (
-            <Field label="Tangents" value={doc.tangentsSummary} />
           )}
         </div>
       )}
