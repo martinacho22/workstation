@@ -10,6 +10,7 @@
  *   %%UPDATE_STATUS label="Auth System" status="active"%%
  *   %%ADD_EDGE from="Auth System" to="Dashboard"%%
  *   %%SET_PHASE phase="Planning"%%
+ *   %%START_WORK label="Auth System"%%
  *   %%BLUEPRINT_START%%  ...nodes...  %%BLUEPRINT_END%%
  *
  * Commands are stripped from the visible message text before display.
@@ -21,6 +22,7 @@ export type CanvasCommand =
   | { type: 'ADD_EDGE';      from: string;  to: string }
   | { type: 'SET_PHASE';     phase: string }
   | { type: 'BLUEPRINT';     nodes: Array<{ label: string; description: string; depends?: string }> }
+  | { type: 'START_WORK';    label: string }
 
 const CMD_RE = /%%([A-Z_]+)(.*?)%%/g
 const ATTR_RE = /(\w+)="([^"]*)"/g
@@ -98,6 +100,12 @@ export function parseIntent(text: string): {
           inlineCommands.push(m[0])
         }
         break
+      case 'START_WORK':
+        if (attrs.label) {
+          commands.push({ type: 'START_WORK', label: attrs.label })
+          inlineCommands.push(m[0])
+        }
+        break
     }
   }
 
@@ -136,6 +144,9 @@ These are invisible to the user — they execute silently.
 ### Connect two nodes with an edge:
 %%ADD_EDGE from="Phase A" to="Phase B"%%
 
+### Start work on a phase (generates auto-handoff):
+%%START_WORK label="Name of phase"%%
+
 ### Generate a full blueprint (multiple nodes at once):
 %%BLUEPRINT_START%%
 [
@@ -152,4 +163,5 @@ These are invisible to the user — they execute silently.
 - First phase is always "Project Setup".
 - Don't spawn duplicate nodes (check the existing sections list first).
 - After blueprint is generated, confirm in plain text what was created.
-- Keep conversation text clean — no raw JSON, no command syntax visible to user.`
+- Keep conversation text clean — no raw JSON, no command syntax visible to user.
+- Use START_WORK when the developer is ready to begin working on a phase — this will create a handoff document automatically.`
