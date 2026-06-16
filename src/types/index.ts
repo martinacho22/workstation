@@ -1,6 +1,6 @@
 // ─── Node Types ───────────────────────────────────────────────────────────────
 
-export type NodeKind = 'section' | 'overview'
+export type NodeKind = 'section' | 'overview' | 'handoff'
 
 export type NodeStatus = 'idle' | 'active' | 'done' | 'blocked'
 
