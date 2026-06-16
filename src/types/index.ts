@@ -21,6 +21,10 @@ export interface WorkstationNodeData {
   blockedReason?: BlockedReason
   definitionOfDone?: string
   contextSnapshot?: string   // last auto-generated context block
+  /** IDs of nodes this node depends on (incoming edges / required predecessors) */
+  dependsOn: string[]
+  /** IDs of nodes that depend on this node (outgoing edges / dependants) */
+  blocks: string[]
   createdAt: number
   updatedAt: number
   [key: string]: unknown
