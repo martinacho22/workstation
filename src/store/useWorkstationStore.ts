@@ -48,7 +48,7 @@ interface WorkstationState {
   generateBlueprint:  () => Promise<void>
   applyBlueprint:     (sections: BlueprintSection[], positions?: { label: string; x: number; y: number }[]) => void
 
-  // Canvas
+  // Canvas + Dependency System
   nodes:             Node<WorkstationNodeData>[]
   edges:             Edge[]
   onNodesChange:     (changes: NodeChange[]) => void
@@ -58,6 +58,20 @@ interface WorkstationState {
   deleteNode:        (id: string) => void
   renameNode:        (id: string, label: string) => void
   executeCommands:   (commands: CanvasCommand[]) => void
+  /** Wire a dependency edge between two nodes. Updates both dependsOn and blocks. */
+  addDependencyEdge: (fromId: string, toId: string) => void
+  /** Remove a dependency edge. Updates both dependsOn and blocks. */
+  removeDependencyEdge: (fromId: string, toId: string) => void
+  /** Start work on a node: sets status to active and auto-generates handoff doc. */
+  startWork: (id: string) => Promise<void>
+  /** Check if all dependencies of a node are done. If so, auto-activate. */
+  checkAndAutoActivate: (nodeId: string) => void
+  /** Get all nodes that depend on (are blocked by) a given node */
+  getDependants: (nodeId: string) => Node<WorkstationNodeData>[]
+  /** Get all nodes that a given node depends on */
+  getDependencies: (nodeId: string) => Node<WorkstationNodeData>[]
+  /** Find parallelizable work trees — groups of nodes that can run simultaneously */
+  getWorkTrees: () => Node<WorkstationNodeData>[][]
 
   // Session
   activeNodeId:    string | null
@@ -112,6 +126,8 @@ function makeNode(
       id, kind, label,
       status:      'idle',
       chatHistory: [],
+      dependsOn:   [],
+      blocks:      [],
       createdAt:   Date.now(),
       updatedAt:   Date.now(),
       ...extra,
@@ -457,7 +473,7 @@ Rules:
           store.addSectionNode(section.label, pos, section.description)
         })
 
-        // Wire dependency edges
+        // Wire dependency edges using the proper action
         const state = get()
         sections.forEach((section) => {
           if (section.dependsOn?.length > 0) {
@@ -465,20 +481,7 @@ Rules:
               const fromNode = state.nodes.find(n => n.data.label === depLabel)
               const toNode   = state.nodes.find(n => n.data.label === section.label)
               if (fromNode && toNode) {
-                const alreadyExists = state.edges.some(
-                  e => e.source === fromNode.id && e.target === toNode.id
-                )
-                if (!alreadyExists) {
-                  set((s) => {
-                    s.edges.push({
-                      id:     nanoid(6),
-                      source: fromNode.id,
-                      target: toNode.id,
-                      type:   'flowEdge',
-                      data:   { kind: 'flow' },
-                    })
-                  })
-                }
+                store.addDependencyEdge(fromNode.id, toNode.id)
               }
             })
           }
@@ -519,16 +522,168 @@ Rules:
           }
         }),
 
-      deleteNode: (id) => set((s) => {
-        s.nodes = s.nodes.filter(n => n.id !== id)
-        s.edges = s.edges.filter(e => e.source !== id && e.target !== id)
-        if (s.activeNodeId === id) s.activeNodeId = null
-      }),
+      deleteNode: (id) => {
+        const state = get()
+        // Clean up dependency links before removing the node
+        const connectedEdges = state.edges.filter(e => e.source === id || e.target === id)
+        for (const edge of connectedEdges) {
+          if (edge.source !== id) {
+            get().removeDependencyEdge(edge.source, id)
+          } else if (edge.target !== id) {
+            get().removeDependencyEdge(id, edge.target)
+          }
+        }
+        set((s) => {
+          s.nodes = s.nodes.filter(n => n.id !== id)
+          s.edges = s.edges.filter(e => e.source !== id && e.target !== id)
+          if (s.activeNodeId === id) s.activeNodeId = null
+        })
+      },
 
       renameNode: (id, label) => set((s) => {
         const n = s.nodes.find(n => n.id === id)
         if (n && label.trim()) { n.data.label = label.trim(); n.data.updatedAt = Date.now() }
       }),
+
+      // ── Dependency System ─────────────────────────────────────────────────
+
+      addDependencyEdge: (fromId, toId) => set((s) => {
+        // Add edge to React Flow's edge list (if not already present)
+        const alreadyExists = s.edges.some(
+          e => e.source === fromId && e.target === toId
+        )
+        if (!alreadyExists) {
+          s.edges.push({
+            id:     `dep-${fromId}-${toId}-${Date.now()}`,
+            source: fromId,
+            target: toId,
+            type:   'dependencyEdge',
+            data:   { kind: 'dependency' },
+          })
+        }
+        // Update dependsOn on the target node
+        const targetNode = s.nodes.find(n => n.id === toId)
+        if (targetNode && !targetNode.data.dependsOn.includes(fromId)) {
+          targetNode.data.dependsOn.push(fromId)
+        }
+        // Update blocks on the source node
+        const sourceNode = s.nodes.find(n => n.id === fromId)
+        if (sourceNode && !sourceNode.data.blocks.includes(toId)) {
+          sourceNode.data.blocks.push(toId)
+        }
+      }),
+
+      removeDependencyEdge: (fromId, toId) => set((s) => {
+        // Remove the edge from React Flow
+        s.edges = s.edges.filter(
+          e => !(e.source === fromId && e.target === toId)
+        )
+        // Update dependsOn on the target node
+        const targetNode = s.nodes.find(n => n.id === toId)
+        if (targetNode) {
+          targetNode.data.dependsOn = targetNode.data.dependsOn.filter(id => id !== fromId)
+        }
+        // Update blocks on the source node
+        const sourceNode = s.nodes.find(n => n.id === fromId)
+        if (sourceNode) {
+          sourceNode.data.blocks = sourceNode.data.blocks.filter(id => id !== toId)
+        }
+      }),
+
+      startWork: async (id: string) => {
+        const state = get()
+        const node = state.nodes.find(n => n.id === id)
+        if (!node) return
+
+        // Check that all dependencies are done
+        const deps = state.getDependencies(id)
+        const blockedDeps = deps.filter(d => d.data.status !== 'done')
+        if (blockedDeps.length > 0) {
+          console.warn(`Cannot start ${node.data.label}: dependencies not done (${blockedDeps.map(d => d.data.label).join(', ')})`)
+          return
+        }
+
+        // Set status to active
+        set((s) => {
+          const n = s.nodes.find(n => n.id === id)
+          if (n) {
+            n.data.status = 'active'
+            n.data.updatedAt = Date.now()
+          }
+        })
+
+        // Auto-generate handoff doc for this work session
+        await get().generateHandoffDoc(id)
+      },
+
+      checkAndAutoActivate: (nodeId: string) => {
+        const { nodes, getDependencies } = get()
+        const node = nodes.find(n => n.id === nodeId)
+        if (!node || node.data.status !== 'idle') return
+
+        const deps = getDependencies(nodeId)
+        const allDepsDone = deps.length === 0 || deps.every(d => d.data.status === 'done')
+
+        if (allDepsDone && deps.length > 0) {
+          set((s) => {
+            const n = s.nodes.find(n => n.id === nodeId)
+            if (n && n.data.status === 'idle') {
+              n.data.status = 'active'
+              n.data.updatedAt = Date.now()
+            }
+          })
+          get().generateHandoffDoc(nodeId)
+        }
+      },
+
+      getDependants: (nodeId) => {
+        return get().nodes.filter(n => n.data.dependsOn.includes(nodeId))
+      },
+
+      getDependencies: (nodeId) => {
+        return get().nodes.filter(n => n.data.blocks.includes(nodeId))
+      },
+
+      getWorkTrees: () => {
+        const { nodes } = get()
+        const sectionNodes = nodes.filter(n => n.data.kind === 'section')
+
+        // Build in-degree map for topological sort
+        const inDegree = new Map<string, number>()
+        const adjList = new Map<string, string[]>()
+        for (const node of sectionNodes) {
+          inDegree.set(node.id, node.data.dependsOn.length)
+          for (const depId of node.data.dependsOn) {
+            if (!adjList.has(depId)) adjList.set(depId, [])
+            adjList.get(depId)!.push(node.id)
+          }
+        }
+
+        // Kahn's algorithm — group by level
+        const levels: string[][] = []
+        let frontier = [...inDegree.entries()]
+          .filter(([_, deg]) => deg === 0)
+          .map(([id]) => id)
+
+        while (frontier.length > 0) {
+          levels.push([...frontier])
+          const next: string[] = []
+          for (const id of frontier) {
+            const children = adjList.get(id) ?? []
+            for (const child of children) {
+              const newDeg = (inDegree.get(child) ?? 1) - 1
+              inDegree.set(child, newDeg)
+              if (newDeg === 0) next.push(child)
+            }
+          }
+          frontier = next
+        }
+
+        return levels.map(levelIds =>
+          levelIds.map(id => nodes.find(n => n.id === id)!)
+            .filter(Boolean)
+        )
+      },
 
       // ── Execute Canvas Commands (from intent parser) ───────────────────────
 
@@ -542,11 +697,9 @@ Rules:
                 description: n.description,
                 dependsOn:   n.depends ? [n.depends] : [],
               }))
-              // Run full 3-pass pipeline async — don't await here
               set((s) => {
                 if (s.project) s.project.blueprint = sections
               })
-              // For orchestrator SPAWN via chat, just apply directly (no critic)
               store.applyBlueprint(sections)
               break
             }
@@ -569,33 +722,34 @@ Rules:
             }
             case 'UPDATE_STATUS': {
               const node = store.nodes.find(n => n.data.label === cmd.label)
-              if (node) store.updateNodeStatus(node.id, cmd.status)
+              if (node) {
+                store.updateNodeStatus(node.id, cmd.status)
+                // If a node is marked done, check if dependants can auto-activate
+                if (cmd.status === 'done') {
+                  const dependants = store.getDependants(node.id)
+                  dependants.forEach(d => store.checkAndAutoActivate(d.id))
+                }
+              }
               break
             }
             case 'ADD_EDGE': {
               const fromNode = store.nodes.find(n => n.data.label === cmd.from)
               const toNode   = store.nodes.find(n => n.data.label === cmd.to)
               if (fromNode && toNode) {
-                const alreadyExists = store.edges.some(
-                  e => e.source === fromNode.id && e.target === toNode.id
-                )
-                if (!alreadyExists) {
-                  set((s) => {
-                    s.edges.push({
-                      id:     nanoid(6),
-                      source: fromNode.id,
-                      target: toNode.id,
-                      type:   'flowEdge',
-                      data:   { kind: 'flow' },
-                    })
-                  })
-                }
+                store.addDependencyEdge(fromNode.id, toNode.id)
               }
               break
             }
             case 'SET_PHASE':
               set((s) => { if (s.project) (s.project as any).currentPhase = cmd.phase })
               break
+            case 'START_WORK': {
+              const targetNode = store.nodes.find(n => n.data.label === cmd.label)
+              if (targetNode) {
+                store.startWork(targetNode.id)
+              }
+              break
+            }
           }
         }
       },
@@ -704,10 +858,36 @@ Write production-quality code. Ask before large structural changes. Be concise.`
       }),
 
       generateHandoffDoc: async (nodeId: string) => {
-        const { nodes } = get()
+        const { nodes, project } = get()
         const node = nodes.find(n => n.id === nodeId)
-        if (!node || node.data.chatHistory.length === 0) return
+        if (!node) return
 
+        // If no chat history yet (auto-triggered from startWork), create a planning handoff
+        if (node.data.chatHistory.length === 0) {
+          const deps = node.data.dependsOn.map(depId => {
+            const depNode = nodes.find(n => n.id === depId)
+            return depNode?.data.label ?? depId
+          })
+          const depText = deps.length > 0
+            ? `Depends on: ${deps.join(', ')}`
+            : 'No dependencies — can start immediately'
+
+          const doc: HandoffDoc = {
+            nodeId,
+            nodeLabel:     node.data.label,
+            lastUpdated:   Date.now(),
+            whatWasBuilt:  'Not yet started — work prepared.',
+            decisionsMade: '',
+            currentStatus: `${depText}. Ready to begin work.`,
+            nextSteps:     `Begin implementation of ${node.data.label}. ${project?.blueprint?.find(b => b.label === node.data.label)?.description ?? ''}`,
+            filesChanged:  [],
+            versions:      [],
+          }
+          get().updateHandoffDoc(nodeId, doc)
+          return
+        }
+
+        // Chat history exists — generate a proper session handoff
         const recentHistory = node.data.chatHistory.slice(-20)
         const prompt = `You are a technical writer. Based on this coding session for "${node.data.label}", write a concise handoff document.
 
