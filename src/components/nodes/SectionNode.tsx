@@ -7,7 +7,7 @@ import InlineTerminal                  from './InlineTerminal'
 import styles from './SectionNode.module.css'
 
 function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
-  const { updateNodeStatus, deleteNode, renameNode, nodes } = useWorkstationStore()
+  const { updateNodeStatus, deleteNode, renameNode, nodes, getDependencies, getDependants, startWork } = useWorkstationStore()
   const { sessions, openChat, closeChat, toggleMinimise }   = useChatSessionsStore()
 
   const [renaming, setRenaming]             = useState(false)
@@ -22,6 +22,12 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
   const session    = sessions[id]
   const chatOpen   = !!session && !session.minimised
   const chatExists = !!session
+
+  // Dependency info
+  const deps       = getDependencies(id)
+  const dependants = getDependants(id)
+  const depsDone   = deps.length === 0 || deps.every(d => d.data.status === 'done')
+  const depsBlocked = deps.filter(d => d.data.status === 'blocked')
 
   // Last message preview — shown when chat is open
   const lastMsg = session?.messages?.length
@@ -89,6 +95,10 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
     setBlockBy('')
   }
 
+  function handleStartWork() {
+    startWork(id)
+  }
+
   return (
     <>
       <div
@@ -148,6 +158,23 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
             </div>
           )}
 
+          {/* Dependency badges */}
+          {deps.length > 0 && !depsDone && (
+            <div className={styles.depBadge}>
+              ⏳ Waiting on: {deps.filter(d => d.data.status !== 'done').map(d => d.data.label).join(', ')}
+            </div>
+          )}
+          {depsBlocked.length > 0 && (
+            <div className={styles.depBlockedBadge}>
+              🚫 Blocked by: {depsBlocked.map(d => d.data.label).join(', ')}
+            </div>
+          )}
+          {dependants.length > 0 && (
+            <div className={styles.depBadge} style={{ borderColor: 'rgba(124,158,255,0.2)' }}>
+              → {dependants.length} dependant{dependants.length > 1 ? 's' : ''}
+            </div>
+          )}
+
           {/* ── Expanded content — shown when chat is open ── */}
           {expanded && (
             <div className={styles.expandedSection}>
@@ -161,7 +188,17 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
                 </div>
               )}
 
-              {/* Launch terminal button — visible when expanded, not just on hover */}
+              {/* Start work button — shown when idle and deps are satisfied */}
+              {data.status === 'idle' && depsDone && (
+                <button
+                  className={styles.startWorkBtn}
+                  onClick={e => { e.stopPropagation(); handleStartWork() }}
+                >
+                  ▶ Start work
+                </button>
+              )}
+
+              {/* Launch terminal button */}
               <button
                 className={styles.launchTerminalBtn}
                 onClick={e => { e.stopPropagation(); setTerminalOpen(v => !v) }}
@@ -216,6 +253,11 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
             }}>
               {data.status === 'done' ? 'Reopen' : 'Mark done'}
             </button>
+            {data.status === 'idle' && depsDone && (
+              <button className={styles.menuItem} onClick={() => { handleStartWork(); setShowMenu(false) }}>
+                Start work
+              </button>
+            )}
             {data.status !== 'blocked' && (
               <button className={styles.menuItem} onClick={() => { setShowBlockModal(true); setShowMenu(false) }}>
                 Mark blocked
