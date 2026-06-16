@@ -48,7 +48,7 @@ const edgeTypes: EdgeTypes = {
 type Screen = 'canvas' | 'dashboard' | 'warroom' | 'settings'
 
 export default function App() {
-  const { nodes, edges, onNodesChange, onEdgesChange, project } = useWorkstationStore()
+  const { nodes, edges, onNodesChange, onEdgesChange, project, addDependencyEdge } = useWorkstationStore()
   const { sessions }  = useChatSessionsStore()
 
   const [screen, setScreen]             = useState<Screen>('canvas')
@@ -60,20 +60,11 @@ export default function App() {
     if (!done) setShowCLISetup(true)
   }, [])
 
-  // Wired onConnect — dragging between handles creates a FlowEdge (dashed blue)
+  // Wired onConnect — dragging between handles creates a dependency edge
   const onConnect = useCallback((connection: Connection) => {
-    const store = useWorkstationStore.getState()
-    const newEdge = {
-      id:     `flow-${connection.source}-${connection.target}-${Date.now()}`,
-      source: connection.source!,
-      target: connection.target!,
-      sourceHandle: connection.sourceHandle ?? undefined,
-      targetHandle: connection.targetHandle ?? undefined,
-      type:   'flowEdge',
-      data:   { kind: 'flow', reason: 'Data flow' },
-    }
-    store.onEdgesChange([{ type: 'add', item: newEdge } as any])
-  }, [])
+    if (!connection.source || !connection.target) return
+    addDependencyEdge(connection.source, connection.target)
+  }, [addDependencyEdge])
 
   // ── First launch ──────────────────────────────────────────────────────────
   if (showCLISetup) {
