@@ -23,6 +23,15 @@ export interface WorkstationNodeData {
   contextSnapshot?: string   // last auto-generated context block
   createdAt: number
   updatedAt: number
+
+  // ── Dependency tracking ──────────────────────────────────────────────────
+  /** IDs of nodes this node depends on (must be 'done' before this can start). */
+  dependsOn: string[]
+  /** IDs of nodes that depend on this node (reverse lookup). */
+  blocks: string[]
+  /** True once the handoff doc has been auto-generated on idle→active transition. */
+  autoHandoffGenerated: boolean
+
   [key: string]: unknown
 }
 
