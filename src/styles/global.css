@@ -7,28 +7,66 @@
 }
 
 :root {
+  /* Canvas */
+  --canvas-bg:        #0a0a0f;
+  --canvas-dot:       #1a1a2e;
+
+  /* Surfaces */
   --bg:          #0a0a0f;
   --surface:     #111118;
+  --surface-1:   #111118;
+  --surface-2:   #16161f;
+  --surface-3:   #1e1e2e;
   --surface2:    #16161f;
-  --border:      #1e1e2e;
-  --border2:     #2a2a3d;
+
+  /* Borders */
+  --border:          #1e1e2e;
+  --border2:         #2a2a3d;
+  --border-subtle:   #1e1e2e;
+  --border-default:  #2a2a3e;
+  --border-bright:   #3a3a5e;
+
+  /* Accent — green */
   --accent:      #00ff88;
   --accent-dim:  rgba(0, 255, 136, 0.15);
   --accent-glow: rgba(0, 255, 136, 0.35);
-  --text:        #e2e2f0;
-  --text-muted:  #6b6b8a;
-  --text-dim:    #3a3a55;
-  --danger:      #ff4466;
-  --warning:     #ffaa00;
-  --done:        rgba(0, 255, 136, 0.4);
 
-  --radius-sm:   6px;
-  --radius:      10px;
-  --radius-lg:   14px;
+  /* Text */
+  --text:          #e2e2f0;
+  --text-primary:  #e8e8f0;
+  --text-secondary:#8888aa;
+  --text-muted:    #6b6b8a;
+  --text-dim:      #3a3a55;
+  --text-terminal: #00ff88;
 
-  --font-sans:   'Inter', system-ui, sans-serif;
-  --font-mono:   'JetBrains Mono', 'Fira Code', monospace;
+  /* Status colors */
+  --status-idle:    #44445a;
+  --status-active:  #00ff88;
+  --status-done:    #3a3a5e;
+  --status-blocked: #ff4466;
 
+  /* Edge colors */
+  --edge-flow:     rgba(0, 255, 136, 0.4);
+  --edge-tangent:  rgba(136, 136, 255, 0.4);
+  --edge-tieback:  rgba(0, 255, 136, 0.6);
+
+  /* Feedback */
+  --danger:   #ff4466;
+  --warning:  #ffaa00;
+  --done:     rgba(0, 255, 136, 0.4);
+
+  /* Typography */
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius:    10px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+
+  /* Node dimensions */
   --node-width:  480px;
   --node-height: 340px;
 }
@@ -37,8 +75,8 @@ html, body, #root {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: var(--bg);
-  color: var(--text);
+  background: var(--canvas-bg);
+  color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 13px;
   -webkit-font-smoothing: antialiased;
@@ -59,7 +97,7 @@ textarea, input {
 
 /* React Flow overrides */
 .react-flow__renderer { background: transparent !important; }
-.react-flow__background { opacity: 0.4; }
+.react-flow__background { opacity: 0.4; background: var(--canvas-bg); }
 .react-flow__attribution { display: none; }
 .react-flow__handle {
   width: 8px !important;
@@ -72,24 +110,34 @@ textarea, input {
   background: var(--accent) !important;
   border-color: var(--accent) !important;
 }
+.react-flow__controls {
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+.react-flow__controls button {
+  background: transparent;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.react-flow__controls button:hover {
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+.react-flow__minimap {
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+.react-flow__edge-path { stroke-width: 1.5; }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-bright); }
 
 /* Animations */
-@keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 12px var(--accent-glow); }
-  50%       { box-shadow: 0 0 24px var(--accent-glow), 0 0 48px rgba(0,255,136,0.15); }
-}
-
-@keyframes typing-dot {
-  0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); }
-  40%           { opacity: 1;   transform: scale(1); }
-}
-
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
