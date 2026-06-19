@@ -55,9 +55,11 @@ export default function InlineTerminal({ nodeId, onClose }: Props) {
         projectDir: project?.projectDir ?? project?.repoPath ?? '.',
       })
 
+      const termId = nanoid(6)
+
       // ── Launch ──────────────────────────────────────────────────────────
       const result = await electronAPI.terminal.create({
-        id:              nanoid(6),
+        id:              termId,
         shell:           'claude',
         skipPermissions: true,
         cwd:             project?.projectDir ?? project?.repoPath ?? undefined,
@@ -69,7 +71,16 @@ export default function InlineTerminal({ nodeId, onClose }: Props) {
         throw new Error(result?.error ?? 'Unknown launch error from main process')
       }
 
-      // ── Success ─────────────────────────────────────────────────────────
+      // ── Success — mark terminal as open on the node ──────────────────────
+      // This is read by FloatingChatCard to show the terminal activity dot.
+      // Using the store's immer setter via a direct mutation helper.
+      useWorkstationStore.setState((s) => {
+        const n = s.nodes.find(n => n.id === nodeId)
+        if (n) {
+          (n.data as any).terminalOpenAt = Date.now()
+        }
+      })
+
       setLaunched(true)
       addChatMessage(nodeId, {
         id:        nanoid(),
@@ -125,13 +136,24 @@ export default function InlineTerminal({ nodeId, onClose }: Props) {
     }
   }
 
+  function handleClose() {
+    // Clear the terminalOpenAt marker when closing
+    useWorkstationStore.setState((s) => {
+      const n = s.nodes.find(n => n.id === nodeId)
+      if (n) {
+        delete (n.data as any).terminalOpenAt
+      }
+    })
+    onClose()
+  }
+
   return (
     <div className={styles.terminal}>
       {/* Header */}
       <div className={styles.header}>
         <span className={styles.icon}>⌘</span>
         <span className={styles.title}>Claude Code — {node.data.label}</span>
-        <button className={styles.closeBtn} onClick={onClose} title="Close">×</button>
+        <button className={styles.closeBtn} onClick={handleClose} title="Close">×</button>
       </div>
 
       {/* CWD */}
