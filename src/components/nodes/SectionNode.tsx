@@ -81,6 +81,8 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
     if (!blockReason.trim()) return
     updateNodeStatus(id, 'blocked', {
       reason:    blockReason.trim(),
+      // Store the label, not the nanoid — so handoff docs show
+      // "Blocked by: Payment System" instead of "Blocked by: aB3xK9pZ"
       blockedBy: blockBy || undefined,
       since:     Date.now(),
     })
@@ -270,7 +272,7 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
             >
               <option value="">Blocked by… (optional)</option>
               {sectionNodes.map(n => (
-                <option key={n.id} value={n.id}>{n.data.label}</option>
+                <option key={n.id} value={n.data.label}>{n.data.label}</option>
               ))}
             </select>
             <div className={styles.modalActions}>
