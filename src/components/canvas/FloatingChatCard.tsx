@@ -14,6 +14,10 @@ import styles from './FloatingChatCard.module.css'
  *  - Phase number badge instead of generic dot
  *  - Status bar at top: node name · status · terminal activity
  *  - Avatar is the phase number, not a generic symbol
+ *
+ * Terminal activity indicator:
+ *  - Reads `node.data.terminalOpenAt` (timestamp) set by InlineTerminal
+ *    when a PTY session opens. No IPC listener needed — the store is the source of truth.
  */
 
 interface Props {
@@ -38,7 +42,6 @@ export default function FloatingChatCard({ nodeId }: Props) {
   const [input, setInput]               = useState('')
   const [streaming, setStreaming]       = useState(false)
   const [streamBuffer, setStreamBuffer] = useState('')
-  const [terminalTs, setTerminalTs]     = useState<number | null>(null)
 
   // Drag
   const dragging   = useRef(false)
@@ -52,15 +55,10 @@ export default function FloatingChatCard({ nodeId }: Props) {
     ? project.blueprint.findIndex(b => b.label === node?.data.label) + 1
     : session?.order + 1 ?? 1
 
-  // Terminal activity — listen for terminal:activity events
-  useEffect(() => {
-    const electronAPI = (window as any).electron
-    if (!electronAPI?.on) return
-    const off = electronAPI.on?.(`terminal:activity:${nodeId}`, () => {
-      setTerminalTs(Date.now())
-    })
-    return () => off?.()
-  }, [nodeId])
+  // Terminal activity — read from store instead of dead IPC listener.
+  // InlineTerminal sets node.data.terminalOpenAt when a PTY session starts.
+  const terminalOpenAt = (node?.data as any).terminalOpenAt as number | undefined
+  const hasTerminalOpen = !!terminalOpenAt
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -158,7 +156,6 @@ export default function FloatingChatCard({ nodeId }: Props) {
 
   const blueprint = project?.blueprint?.find(b => b.label === node.data.label)
   const pos       = session.pos
-  const hasTerminal = (node.data as any).terminalOpen ?? false
 
   // Status label
   const statusLabel = {
@@ -185,11 +182,11 @@ export default function FloatingChatCard({ nodeId }: Props) {
             {statusLabel}
           </span>
         </div>
-        {(hasTerminal || terminalTs) && (
+        {hasTerminalOpen && (
           <div className={styles.terminalActivity}>
             <span className={styles.terminalDot} />
             <span className={styles.terminalLabel}>
-              {terminalTs ? `Session ${timeAgo(terminalTs)}` : 'Session open'}
+              Session open
             </span>
           </div>
         )}
