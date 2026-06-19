@@ -79,6 +79,18 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
+// ─── Clean up PTY processes on quit ───────────────────────────────────────────
+app.on('before-quit', () => {
+  for (const [id, ptyProcess] of Object.entries(terminals)) {
+    try {
+      ptyProcess.kill()
+    } catch (_) {
+      // Process may already be dead — ignore
+    }
+    delete terminals[id]
+  }
+})
+
 // ─── PTY / Terminal IPC ───────────────────────────────────────────────────────
 
 const terminals = {}
