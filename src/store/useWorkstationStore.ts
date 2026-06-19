@@ -1,3 +1,12 @@
+/**
+ * useWorkstationStore — Zustand store for workstation state.
+ *
+ * EXTERNAL DATA CAVEAT: The store's persist middleware has a known limitation:
+ * Immmer-set data is JSON.stringify'd and re-parsed on hydration, so
+ * non-serializable items (e.g. Date objects, class instances) will be lost.
+ * All data stored here must be JSON-serializable.
+ */
+
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import { persist } from 'zustand/middleware'
@@ -143,9 +152,31 @@ export const useWorkstationStore = create<WorkstationState>()(
           const electronAPI = (window as any).electron
           if (electronAPI?.fs?.createProjectDir) {
             const result = await electronAPI.fs.createProjectDir(p.name)
-            if (result?.success) projectDir = result.projectDir
+            if (result?.success) {
+              projectDir = result.projectDir
+            } else {
+              // Filesystem creation failed — log and notify user via console
+              const errMsg = result?.error ?? 'Unknown filesystem error'
+              console.error(`[Workstation] createProjectDir failed for "${p.name}": ${errMsg}`)
+              // Surface a toast-style message by pushing an error chat message
+              // to the overview node if it exists
+              set((s) => {
+                const overview = s.nodes.find(n => n.data.kind === 'overview')
+                if (overview) {
+                  overview.data.chatHistory.push({
+                    id: nanoid(),
+                    role: 'assistant',
+                    content: `⚠ Project directory creation failed: ${errMsg}\n\nClaude Code will fall back to home directory (~) for shell sessions. You can set a project folder manually in Settings → Project.`,
+                    timestamp: Date.now(),
+                  })
+                }
+              })
+            }
           }
-        } catch (_) {}
+        } catch (err) {
+          // IPC call itself failed (e.g. Electron not running)
+          console.error(`[Workstation] createProjectDir IPC error:`, err)
+        }
 
         const newProject: Project = {
           ...p, id, createdAt: now, updatedAt: now,
@@ -567,24 +598,27 @@ Rules:
               }
               break
             }
-            case 'UPDATE_STATUS': {
+            case 'STATUS_CHANGE': {
               const node = store.nodes.find(n => n.data.label === cmd.label)
               if (node) store.updateNodeStatus(node.id, cmd.status)
               break
             }
-            case 'ADD_EDGE': {
-              const fromNode = store.nodes.find(n => n.data.label === cmd.from)
-              const toNode   = store.nodes.find(n => n.data.label === cmd.to)
-              if (fromNode && toNode) {
-                const alreadyExists = store.edges.some(
-                  e => e.source === fromNode.id && e.target === toNode.id
-                )
+            case 'DELETE': {
+              const node = store.nodes.find(n => n.data.label === cmd.label)
+              if (node) store.deleteNode(node.id)
+              break
+            }
+            case 'DEPENDENCY': {
+              const from = store.nodes.find(n => n.data.label === cmd.from)
+              const to   = store.nodes.find(n => n.data.label === cmd.to)
+              if (from && to) {
+                const alreadyExists = store.edges.some(e => e.source === from.id && e.target === to.id)
                 if (!alreadyExists) {
                   set((s) => {
                     s.edges.push({
                       id:     nanoid(6),
-                      source: fromNode.id,
-                      target: toNode.id,
+                      source: from.id,
+                      target: to.id,
                       type:   'flowEdge',
                       data:   { kind: 'flow' },
                     })
@@ -593,99 +627,142 @@ Rules:
               }
               break
             }
-            case 'SET_PHASE':
-              set((s) => { if (s.project) (s.project as any).currentPhase = cmd.phase })
-              break
           }
         }
       },
 
-      // ── Session ───────────────────────────────────────────────────────────
+      // ── Session ────────────────────────────────────────────────────────────
 
-      activeNodeId:   null,
-      sessionLoading: false,
+      activeNodeId:    null,
+      sessionLoading:  false,
 
       setActiveNode: (id) => set((s) => { s.activeNodeId = id }),
 
       addChatMessage: (nodeId, msg) => set((s) => {
-        const n = s.nodes.find(n => n.id === nodeId)
-        if (n) {
-          n.data.chatHistory.push(msg)
-          n.data.updatedAt = Date.now()
-          if (n.data.status === 'idle') n.data.status = 'active'
+        const node = s.nodes.find(n => n.id === nodeId)
+        if (node) {
+          node.data.chatHistory.push(msg)
+          node.data.updatedAt = Date.now()
         }
       }),
 
       endSession: async (nodeId: string) => {
+        const { buildProjectContext, generateHandoffDoc } = get()
+        const state = get()
+        const currentNode = state.nodes.find(n => n.id === nodeId)
+
+        if (!currentNode || currentNode.data.chatHistory.length === 0) return
+
         set((s) => { s.sessionLoading = true })
-        await get().generateHandoffDoc(nodeId)
-        const ctx = get().generateContextBlock(nodeId)
-        set((s) => {
-          const n = s.nodes.find(n => n.id === nodeId)
-          if (n) n.data.contextSnapshot = ctx
-          s.sessionLoading = false
-          s.activeNodeId   = null
-        })
-      },
 
-      // ── Context ───────────────────────────────────────────────────────────
+        const context = buildProjectContext(nodeId)
+        const recentChat = currentNode.data.chatHistory.slice(-15)
+          .map(m => `${m.role === 'user' ? 'Developer' : 'Assistant'}: ${m.content.slice(0, 300)}`)
+          .join('\n')
 
-      buildProjectContext: (nodeId?: string): ProjectContext => {
-        const { project, nodes } = get()
-        const currentNode  = nodeId ? nodes.find(n => n.id === nodeId) : undefined
-        const sectionNodes = nodes.filter(n => n.data.kind === 'section' || n.data.kind === 'overview')
+        // Generate a session summary from chat history
+        const summaryPrompt = [
+          `Summarise this coding session for "${currentNode.data.label}" in the ${state.project?.name ?? ''} project.`,
+          ``,
+          `Context:`,
+          `${currentNode.data.handoffDoc ? `Prior handoff: ${currentNode.data.handoffDoc.currentStatus}` : 'First session'}`,
+          `Blueprint: ${currentNode.data.label}`,
+          ``,
+          `Recent messages:`,
+          recentChat,
+          ``,
+          `Write a BRIEF summary (2-3 sentences): what was done, what decisions were made, what needs help.`,
+        ].join('\n')
 
-        return {
-          projectName:          project?.name ?? 'Untitled',
-          projectDescription:   project?.description ?? '',
-          stack:                project?.stack ?? '',
-          repoPath:             project?.repoPath,
-          projectDir:           project?.projectDir,
-          sections: sectionNodes.map(n => ({
-            label:       n.data.label,
-            status:      n.data.status,
-            description: project?.blueprint?.find(b => b.label === n.data.label)?.description,
-          })),
-          adrs:  (project?.adrs ?? []).map(a => ({ title: a.title, decision: a.decision, reason: a.reason })),
-          bugs:  (project?.bugs ?? []).filter(b => b.status === 'open').map(b => ({
-            description: b.description, affectedSection: b.affectedSection, status: b.status,
-          })),
-          currentSection:        currentNode?.data.label,
-          currentSectionPurpose: project?.blueprint?.find(b => b.label === currentNode?.data.label)?.description,
-          handoffSummary:        currentNode?.data.handoffDoc
-            ? `Last session: ${currentNode.data.handoffDoc.currentStatus}. Next: ${currentNode.data.handoffDoc.nextSteps}`
-            : undefined,
+        try {
+          const summary = await runClaude(summaryPrompt)
+          const msg: ChatMessage = {
+            id: nanoid(),
+            role: 'assistant',
+            content: `📋 Session Summary\n\n${summary}`,
+            timestamp: Date.now(),
+          }
+          set((s) => {
+            s.sessionLoading = false
+            const n = s.nodes.find(n => n.id === nodeId)
+            if (n) {
+              n.data.chatHistory.push(msg)
+              n.data.updatedAt = Date.now()
+            }
+          })
+
+          // Generate handoff doc from this session
+          await generateHandoffDoc(nodeId)
+
+        } catch {
+          set((s) => { s.sessionLoading = false })
         }
       },
 
-      generateContextBlock: (nodeId: string): string => {
-        const ctx       = get().buildProjectContext(nodeId)
-        const doneCount = ctx.sections.filter(s => s.status === 'done').length
-        const total     = ctx.sections.length
-        const cwd       = ctx.projectDir ?? ctx.repoPath ?? '(not set)'
+      // ── Context ─────────────────────────────────────────────────────────────
 
-        return `# Workstation Context
-# Project: ${ctx.projectName} | Stack: ${ctx.stack} | Progress: ${doneCount}/${total} sections done
-# Working directory: ${cwd}
+      buildProjectContext: (nodeId) => {
+        const state = get()
+        if (!state.project) {
+          return { projectName: '', projectDescription: '', stack: '', sections: [], adrs: [], bugs: [] }
+        }
 
-## Working on: ${ctx.currentSection ?? 'Overview'}
-${ctx.currentSectionPurpose ? `Goal: ${ctx.currentSectionPurpose}` : ''}
-${ctx.handoffSummary ?? 'First session in this section.'}
+        const sectionNodes = state.nodes.filter(n => n.data.kind === 'section')
 
-## All Sections
-${ctx.sections.map(s => `[${s.status === 'done' ? 'x' : s.status === 'blocked' ? '!' : ' '}] ${s.label}${s.description ? ' — ' + s.description : ''}`).join('\n')}
+        const currentNode = nodeId
+          ? state.nodes.find(n => n.id === nodeId)
+          : null
 
-## Architecture Decisions
-${ctx.adrs.length > 0 ? ctx.adrs.map(a => `- ${a.title}: ${a.decision} (${a.reason})`).join('\n') : 'None recorded.'}
+        return {
+          projectName:        state.project.name,
+          projectDescription: state.project.description,
+          stack:              state.project.stack,
+          repoPath:           state.project.repoPath,
+          projectDir:         state.project.projectDir,
+          sections:           sectionNodes.map(n => ({
+            label:       n.data.label,
+            status:      n.data.status,
+            description: (n.data as any).description,
+          })),
+          adrs:   (state.project.adrs ?? []).map(a => ({ title: a.title, decision: a.decision, reason: a.reason })),
+          bugs:   (state.project.bugs ?? []).map(b => ({ description: b.description, affectedSection: b.affectedSection, status: b.status })),
+          currentSection:       currentNode?.data.label,
+          currentSectionPurpose: (currentNode?.data as any).description,
+          handoffSummary:       currentNode?.data.handoffDoc?.currentStatus,
+        }
+      },
 
-## Open Bugs
-${ctx.bugs.length > 0 ? ctx.bugs.map(b => `- [${b.affectedSection}] ${b.description}`).join('\n') : 'None.'}
+      generateContextBlock: (nodeId: string) => {
+        const state = get()
+        const ctx = useWorkstationStore.getState().buildProjectContext(nodeId)
+        const node = state.nodes.find(n => n.id === nodeId)
+        const cwd = ctx.projectDir ?? ctx.repoPath ?? '(not set)'
 
-## Instructions
-You are working on "${ctx.currentSection ?? 'this project'}" in ${ctx.projectName}.
-Stack: ${ctx.stack}. Working directory: ${cwd}.
-${ctx.currentSectionPurpose ? `Your goal: ${ctx.currentSectionPurpose}` : ''}
-Write production-quality code. Ask before large structural changes. Be concise.`
+        return [
+          `# ${ctx.projectName}`,
+          ``,
+          ctx.projectDescription,
+          ``,
+          `## Stack`,
+          ctx.stack,
+          ``,
+          `## Working Directory`,
+          `\`\`\``,
+          cwd,
+          `\`\`\``,
+          ``,
+          `## Sections`,
+          ...ctx.sections.map(s => `- **${s.label}** (${s.status})${s.description ? ` — ${s.description}` : ''}`),
+          ``,
+          ctx.adrs.length > 0 ? `## Decisions\n${ctx.adrs.map(a => `- **${a.title}**: ${a.decision} (${a.reason})`).join('\n')}\n` : '',
+          ctx.bugs.length > 0  ? `## Bugs\n${ctx.bugs.map(b => `- **${b.affectedSection}**: ${b.description} (${b.status})`).join('\n')}\n` : '',
+          node?.data.handoffDoc ? `## Last Handoff\n${node.data.handoffDoc.currentStatus}\n\nNext: ${node.data.handoffDoc.nextSteps}\n` : '',
+          `## Current Section`,
+          ctx.currentSection ?? 'Not set',
+          ctx.currentSectionPurpose ? `\nPurpose: ${ctx.currentSectionPurpose}` : '',
+          ``,
+          `Remember: this context was auto-generated.`,
+        ].filter(Boolean).join('\n')
       },
 
       // ── Handoff Docs ──────────────────────────────────────────────────────
@@ -695,6 +772,8 @@ Write production-quality code. Ask before large structural changes. Be concise.`
         if (!n) return
         const existing = n.data.handoffDoc
         if (existing) {
+          // Cap versions at 20 — prune oldest when exceeded
+          existing.versions = existing.versions.slice(-19)
           existing.versions.push({ timestamp: Date.now(), snapshot: { ...existing, versions: [] } })
           Object.assign(existing, doc)
         } else {
@@ -748,128 +827,24 @@ Return ONLY a JSON object:
 
       addBug: (description, affectedSection) => set((s) => {
         if (!s.project) return
+        const bug: Bug = {
+          id: nanoid(8),
+          description,
+          affectedSection,
+          status: 'open',
+          createdAt: Date.now(),
+        }
         if (!s.project.bugs) s.project.bugs = []
-        s.project.bugs.push({
-          id: nanoid(6), description, affectedSection, status: 'open', createdAt: Date.now(),
-        })
-        s.project.updatedAt = Date.now()
-        const idx = s.projects.findIndex(p => p.id === s.project?.id)
-        if (idx >= 0) s.projects[idx] = s.project!
+        s.project.bugs.push(bug)
       }),
 
       fixBug: (id) => set((s) => {
-        const bug = s.project?.bugs?.find(b => b.id === id)
+        if (!s.project?.bugs) return
+        const bug = s.project.bugs.find(b => b.id === id)
         if (bug) { bug.status = 'fixed'; bug.fixedAt = Date.now() }
-        const idx = s.projects.findIndex(p => p.id === s.project?.id)
-        if (idx >= 0 && s.project) s.projects[idx] = s.project
       }),
 
       deleteBug: (id) => set((s) => {
         if (!s.project?.bugs) return
         s.project.bugs = s.project.bugs.filter(b => b.id !== id)
-        const idx = s.projects.findIndex(p => p.id === s.project?.id)
-        if (idx >= 0) s.projects[idx] = s.project!
       }),
-
-      // ── Decisions ─────────────────────────────────────────────────────────
-
-      addDecision: (decision, reason, sectionId) => set((s) => {
-        if (!s.project) return
-        if (!s.project.decisions) s.project.decisions = []
-        s.project.decisions.push({ id: nanoid(6), decision, reason, sectionId, createdAt: Date.now() })
-        s.project.updatedAt = Date.now()
-        const idx = s.projects.findIndex(p => p.id === s.project?.id)
-        if (idx >= 0) s.projects[idx] = s.project!
-      }),
-
-      deleteDecision: (id) => set((s) => {
-        if (!s.project?.decisions) return
-        s.project.decisions = s.project.decisions.filter(d => d.id !== id)
-        const idx = s.projects.findIndex(p => p.id === s.project?.id)
-        if (idx >= 0) s.projects[idx] = s.project!
-      }),
-
-      // ── ADRs ──────────────────────────────────────────────────────────────
-
-      addAdr: (title, decision, reason) => set((s) => {
-        if (!s.project) return
-        if (!s.project.adrs) s.project.adrs = []
-        s.project.adrs.push({ id: nanoid(6), title, decision, reason, createdAt: Date.now() })
-        s.project.updatedAt = Date.now()
-        const idx = s.projects.findIndex(p => p.id === s.project?.id)
-        if (idx >= 0) s.projects[idx] = s.project!
-      }),
-
-      deleteAdr: (id) => set((s) => {
-        if (!s.project?.adrs) return
-        s.project.adrs = s.project.adrs.filter(a => a.id !== id)
-        const idx = s.projects.findIndex(p => p.id === s.project?.id)
-        if (idx >= 0) s.projects[idx] = s.project!
-      }),
-
-      // ── Export ────────────────────────────────────────────────────────────
-
-      exportHandoff: (): string => {
-        const { project, nodes } = get()
-        const sections = nodes.filter(n => n.data.kind === 'section')
-        const now      = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-
-        let md = `# ${project?.name ?? 'Project'} — Handoff\n_${now}_\n\n`
-        md += `**Stack:** ${project?.stack ?? 'Unknown'}  \n`
-        md += `**Description:** ${project?.description ?? ''}\n\n`
-        if (project?.projectDir) md += `**Project directory:** \`${project.projectDir}\`\n\n`
-
-        if (project?.adrs?.length) {
-          md += `## Architecture Decisions\n`
-          project.adrs.forEach(a => {
-            md += `### ${a.title}\n- **Decision:** ${a.decision}\n- **Reason:** ${a.reason}\n\n`
-          })
-        }
-
-        md += `## Sections\n\n`
-        sections.forEach(n => {
-          const status = n.data.status === 'done' ? '[x]' : n.data.status === 'blocked' ? '[!]' : '[ ]'
-          md += `### ${status} ${n.data.label}\n`
-          if (n.data.handoffDoc) {
-            const d = n.data.handoffDoc
-            md += `**Built:** ${d.whatWasBuilt}\n\n`
-            md += `**Decisions:** ${d.decisionsMade}\n\n`
-            md += `**Status:** ${d.currentStatus}\n\n`
-            if (d.nextSteps)          md += `**Next:** ${d.nextSteps}\n\n`
-            if (d.filesChanged?.length) md += `**Files:** ${d.filesChanged.map(f => `\`${f}\``).join(', ')}\n\n`
-          }
-          md += `---\n\n`
-        })
-
-        const openBugs = (project?.bugs ?? []).filter(b => b.status === 'open')
-        if (openBugs.length) {
-          md += `## Open Bugs\n`
-          openBugs.forEach(b => { md += `- [${b.affectedSection}] ${b.description}\n` })
-          md += '\n'
-        }
-        return md
-      },
-
-      // ── Claude CLI ────────────────────────────────────────────────────────
-
-      claudeCliPath: 'claude',
-      setClaudeCliPath: (p) => {
-        set((s) => { s.claudeCliPath = p || 'claude' })
-        const electronAPI = (window as any).electron
-        if (electronAPI?.claude?.setPath) electronAPI.claude.setPath(p || 'claude')
-      },
-    })),
-    {
-      name: 'workstation-store-v4',
-      partialize: (s) => ({
-        projects:        s.projects,
-        activeProjectId: s.activeProjectId,
-        project:         s.project,
-        nodes:           s.nodes,
-        edges:           s.edges,
-        claudeCliPath:   s.claudeCliPath,
-        grillAnswers:    s.grillAnswers,
-      }),
-    }
-  )
-)
