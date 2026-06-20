@@ -6,21 +6,10 @@ import { ChatMessage }           from '@/types'
 import { nanoid }                from 'nanoid'
 import styles from './FloatingChatCard.module.css'
 
-/**
- * FloatingChatCard — worker chat for a specific node.
- *
- * Visual identity:
- *  - Blue accent (#7c9eff) — distinct from orchestrator green (#00ff88)
- *  - Phase number badge instead of generic dot
- *  - Status bar at top: node name · status · terminal activity
- *  - Avatar is the phase number, not a generic symbol
- */
-
 interface Props {
   nodeId: string
 }
 
-// Format ms since timestamp as "Xm ago" / "just now" etc.
 function timeAgo(ts: number): string {
   const diff = Date.now() - ts
   if (diff < 60_000)  return 'just now'
@@ -28,9 +17,37 @@ function timeAgo(ts: number): string {
   return `${Math.floor(diff / 3600_000)}h ago`
 }
 
+/**
+ * Simple heuristic to detect if a response contains a technical decision
+ * that should be logged automatically.
+ */
+function detectDecision(text: string): { decision: string; reason: string } | null {
+  const lines = text.split('\n').filter(l => l.trim())
+  for (const line of lines) {
+    const lower = line.toLowerCase()
+    // Detect "I'll use X", "we should use X", "let's go with X", "decided to use X"
+    const useMatch = line.match(/(?:I'?ll|we should|let's go with|decided to|going to) use\s+([\w\s./#-]+)/i)
+    if (useMatch) {
+      return {
+        decision: `Use ${useMatch[1].trim()}`,
+        reason: line.trim(),
+      }
+    }
+    // Detect "chose X over Y"
+    const choseMatch = line.match(/(?:chose|chosen|picked|selecting)\s+([\w\s./#-]+)\s+(?:over|instead of|rather than)\s+([\w\s./#-]+)/i)
+    if (choseMatch) {
+      return {
+        decision: `Use ${choseMatch[1].trim()} over ${choseMatch[2].trim()}`,
+        reason: line.trim(),
+      }
+    }
+  }
+  return null
+}
+
 export default function FloatingChatCard({ nodeId }: Props) {
-  const { nodes, project, addChatMessage, updateNodeStatus } = useWorkstationStore()
-  const { sessions, closeChat, minimiseChat, updatePos }     = useChatSessionsStore()
+  const { nodes, project, addChatMessage, updateNodeStatus, addDecision } = useWorkstationStore()
+  const { sessions, closeChat, minimiseChat, updatePos }                  = useChatSessionsStore()
 
   const session = sessions[nodeId]
   const node    = nodes.find(n => n.id === nodeId)
@@ -40,28 +57,62 @@ export default function FloatingChatCard({ nodeId }: Props) {
   const [streamBuffer, setStreamBuffer] = useState('')
   const [terminalTs, setTerminalTs]     = useState<number | null>(null)
 
-  // Drag
   const dragging   = useRef(false)
   const dragOffset = useRef({ x: 0, y: 0 })
   const cardRef    = useRef<HTMLDivElement>(null)
   const bottomRef  = useRef<HTMLDivElement>(null)
   const inputRef   = useRef<HTMLTextAreaElement>(null)
 
-  // Phase order — position in blueprint
   const phaseIndex = project?.blueprint
     ? project.blueprint.findIndex(b => b.label === node?.data.label) + 1
     : session?.order + 1 ?? 1
 
-  // Terminal activity — listen for terminal:activity events
+  // ── Terminal activity — subscribe to real terminal.onData ─────────────────
   useEffect(() => {
     const electronAPI = (window as any).electron
-    if (!electronAPI?.on) return
-    const off = electronAPI.on?.(`terminal:activity:${nodeId}`, () => {
+    if (!electronAPI?.terminal?.onData) return
+
+    // Subscribe to terminal data for this node's terminal sessions
+    // Use a wildcard approach — listen for any terminal:data events and
+    // check if they're related to this node
+    const unsub = electronAPI.terminal.onData(nodeId, () => {
       setTerminalTs(Date.now())
     })
-    return () => off?.()
+
+    return () => {
+      if (typeof unsub === 'function') unsub()
+    }
   }, [nodeId])
 
+  // Also listen for terminal exit events to clear the activity indicator
+  useEffect(() => {
+    const electronAPI = (window as any).electron
+    if (!electronAPI?.terminal?.onExit) return
+
+    const unsub = electronAPI.terminal.onExit(nodeId, () => {
+      // Keep the dot but mark it as stale after 30s
+      setTerminalTs(Date.now())
+    })
+
+    return () => {
+      if (typeof unsub === 'function') unsub()
+    }
+  }, [nodeId])
+
+  // ── Auto-fade terminal activity after 30s of silence ─────────────────────
+  useEffect(() => {
+    if (!terminalTs) return
+    const elapsed = Date.now() - terminalTs
+    if (elapsed > 30_000) return
+
+    const timer = setTimeout(() => {
+      setTerminalTs(null)
+    }, 30_000 - elapsed)
+
+    return () => clearTimeout(timer)
+  }, [terminalTs])
+
+  // ── Scroll to bottom on new messages ─────────────────────────────────────
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [node?.data.chatHistory, streamBuffer])
@@ -134,10 +185,21 @@ export default function FloatingChatCard({ nodeId }: Props) {
       }, { skipPermissions: false, systemPrompt })
 
       setStreamBuffer('')
+
+      const content = fullText || accumulated
       addChatMessage(node.id, {
         id: nanoid(), role: 'assistant',
-        content: fullText || accumulated, timestamp: Date.now(),
+        content, timestamp: Date.now(),
       })
+
+      // Auto-detect and log decisions from Claude's response
+      if (content && project) {
+        const decision = detectDecision(content)
+        if (decision) {
+          addDecision(decision.decision, decision.reason, node.data.label)
+        }
+      }
+
       if (node.data.status === 'idle') updateNodeStatus(node.id, 'active')
     } catch (err) {
       setStreamBuffer('')
@@ -156,9 +218,10 @@ export default function FloatingChatCard({ nodeId }: Props) {
   if (!node || !session) return null
   if (session.minimised)  return null
 
-  const blueprint = project?.blueprint?.find(b => b.label === node.data.label)
-  const pos       = session.pos
-  const hasTerminal = (node.data as any).terminalOpen ?? false
+  const pos = session.pos
+
+  // Has terminal activity (green dot) if within last 30s
+  const hasTerminalActivity = terminalTs !== null && (Date.now() - terminalTs) < 30_000
 
   // Status label
   const statusLabel = {
@@ -185,7 +248,7 @@ export default function FloatingChatCard({ nodeId }: Props) {
             {statusLabel}
           </span>
         </div>
-        {(hasTerminal || terminalTs) && (
+        {hasTerminalActivity && (
           <div className={styles.terminalActivity}>
             <span className={styles.terminalDot} />
             <span className={styles.terminalLabel}>
@@ -199,14 +262,14 @@ export default function FloatingChatCard({ nodeId }: Props) {
       <div className={styles.header} onMouseDown={onMouseDown}>
         <div className={styles.headerLeft}>
           <span className={styles.headerDesc}>
-            {blueprint?.description ?? 'Planning companion'}
+            Planning companion
           </span>
         </div>
         <div className={styles.headerActions}>
           <button
             className={styles.iconBtn}
             onClick={() => minimiseChat(nodeId)}
-            title="Minimise — keeps session alive in tray"
+            title="Minimise"
           >
             –
           </button>
