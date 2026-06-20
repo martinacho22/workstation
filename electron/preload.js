@@ -46,10 +46,6 @@ contextBridge.exposeInMainWorld('electron', {
 
   // ─── Diagnostics ─────────────────────────────────────────────────────────
   diagnostics: {
-    /**
-     * Returns { ptyAvailable, path, shell, home }
-     * Useful for debugging launch failures — call from InlineTerminal error state.
-     */
     pty: () => ipcRenderer.invoke('diagnostics:pty'),
   },
 
@@ -66,5 +62,8 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.invoke('fs:checkDir', { dirPath }),
     openInFinder: (dirPath) =>
       ipcRenderer.invoke('fs:openInFinder', { dirPath }),
+    /** Read a directory and return its contents as a flat list of {name, path, isDir} */
+    readDirectory: (dirPath) =>
+      ipcRenderer.invoke('fs:readDirectory', { dirPath }),
   },
 })
