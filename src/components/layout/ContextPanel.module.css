@@ -1,0 +1,304 @@
+.panel {
+  width: 280px;
+  min-width: 280px;
+  height: 100%;
+  background: #0c0c14;
+  border-left: 1px solid rgba(255,255,255,0.05);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  flex-shrink: 0;
+}
+.headerIcon {
+  font-size: 14px;
+  color: rgba(255,255,255,0.25);
+}
+.headerTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  flex: 1;
+}
+.closeBtn {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.2);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+.closeBtn:hover { color: rgba(255,255,255,0.6); background: rgba(255,255,255,0.05); }
+
+/* ── Tabs ── */
+.tabs {
+  display: flex;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  flex-shrink: 0;
+}
+.tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.3);
+  background: none;
+  border: none;
+  border-bottom: 1.5px solid transparent;
+  cursor: pointer;
+  font-family: inherit;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tab:hover { color: rgba(255,255,255,0.5); }
+.tabActive {
+  color: var(--accent) !important;
+  border-bottom-color: var(--accent);
+}
+
+.badge {
+  font-size: 9px;
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.35);
+  padding: 1px 5px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+.badgeBug {
+  background: rgba(248,113,113,0.12);
+  color: rgba(248,113,113,0.7);
+}
+
+/* ── Content ── */
+.content {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* ── Empty state ── */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 30px 14px;
+  text-align: center;
+}
+.emptyIcon {
+  font-size: 18px;
+  color: rgba(255,255,255,0.08);
+}
+.emptyText {
+  font-size: 12px;
+  color: rgba(255,255,255,0.25);
+  font-weight: 500;
+}
+.emptyHint {
+  font-size: 10px;
+  color: rgba(255,255,255,0.15);
+  line-height: 1.5;
+}
+
+/* ── List panel ── */
+.listPanel {
+  display: flex;
+  flex-direction: column;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  gap: 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.panelMeta {
+  font-size: 10px;
+  color: rgba(255,255,255,0.2);
+  flex: 1;
+  line-height: 1.4;
+}
+
+.addBtn {
+  background: rgba(0,255,136,0.04);
+  border: 1px solid rgba(0,255,136,0.1);
+  color: rgba(0,255,136,0.5);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
+  flex-shrink: 0;
+}
+.addBtn:hover {
+  background: rgba(0,255,136,0.1);
+  color: rgba(0,255,136,0.8);
+}
+
+/* ── Row ── */
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.02);
+  transition: background 0.1s;
+}
+.row:hover { background: rgba(255,255,255,0.02); }
+.rowFixed { opacity: 0.4; }
+
+.rowDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.rowInfo {
+  flex: 1;
+  min-width: 0;
+}
+.rowTitle {
+  font-size: 12px;
+  color: rgba(255,255,255,0.65);
+  font-weight: 500;
+  line-height: 1.4;
+  word-break: break-word;
+}
+.rowMeta {
+  font-size: 10px;
+  color: rgba(255,255,255,0.25);
+  margin-top: 2px;
+}
+
+.rowDecision {
+  font-size: 11px;
+  color: rgba(255,255,255,0.5);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+.rowReason {
+  font-size: 10px;
+  color: rgba(255,255,255,0.25);
+  font-style: italic;
+  margin-top: 2px;
+}
+
+.rowActions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.fixBtn, .deleteBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  transition: background 0.1s, color 0.1s;
+}
+.fixBtn {
+  color: rgba(0,255,136,0.4);
+  font-weight: 600;
+}
+.fixBtn:hover { background: rgba(0,255,136,0.06); color: rgba(0,255,136,0.7); }
+.deleteBtn {
+  color: rgba(255,255,255,0.15);
+  font-size: 12px;
+}
+.deleteBtn:hover { background: rgba(248,113,113,0.08); color: rgba(248,113,113,0.6); }
+
+/* ── Bug-specific ── */
+.bugDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(248,113,113,0.6);
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+.bugDotFixed {
+  background: rgba(74,222,128,0.4);
+}
+
+/* ── ADR-specific ── */
+.adrDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  background: rgba(136,136,255,0.5);
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+/* ── Group ── */
+.group { }
+.groupLabel {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.2);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 8px 14px 4px;
+}
+
+/* ── Form ── */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  background: rgba(255,255,255,0.01);
+}
+.formInput {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.7);
+  font-size: 11px;
+  padding: 6px 8px;
+  border-radius: 5px;
+  font-family: inherit;
+  width: 100%;
+  transition: border-color 0.15s;
+}
+.formInput:focus { outline: none; border-color: rgba(0,255,136,0.2); }
+.formInput::placeholder { color: rgba(255,255,255,0.15); }
+.formActions { display: flex; justify-content: flex-end; }
+.formSubmit {
+  background: rgba(0,255,136,0.08);
+  border: 1px solid rgba(0,255,136,0.15);
+  color: rgba(0,255,136,0.7);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.formSubmit:disabled { opacity: 0.3; cursor: not-allowed; }
+.formSubmit:hover:not(:disabled) { background: rgba(0,255,136,0.12); color: rgba(0,255,136,0.9); }
