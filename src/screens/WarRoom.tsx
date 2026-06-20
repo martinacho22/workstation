@@ -2,23 +2,29 @@ import { useState } from 'react'
 import { useWorkstationStore } from '@/store/useWorkstationStore'
 import styles from './WarRoom.module.css'
 
-type Tab = 'status' | 'bugs' | 'adrs' | 'export'
+type Tab = 'status' | 'bugs' | 'decisions' | 'adrs' | 'export'
 
 export default function WarRoom() {
   const {
     project, nodes,
+    addDecision, deleteDecision,
     addAdr, deleteAdr,
     addBug, fixBug, deleteBug,
     exportHandoff,
   } = useWorkstationStore()
 
   const [tab, setTab] = useState<Tab>('status')
-  const [copied, setCopied] = useState(false)
 
   // Bug form
   const [bugDesc, setBugDesc] = useState('')
   const [bugSection, setBugSection] = useState('')
   const [showBugForm, setShowBugForm] = useState(false)
+
+  // Decision form
+  const [showDecisionForm, setShowDecisionForm] = useState(false)
+  const [decText, setDecText] = useState('')
+  const [decReason, setDecReason] = useState('')
+  const [decSection, setDecSection] = useState('')
 
   // ADR form
   const [adrTitle, setAdrTitle] = useState('')
@@ -35,6 +41,7 @@ export default function WarRoom() {
   const bugs = project?.bugs ?? []
   const openBugs = bugs.filter(b => b.status === 'open')
   const fixedBugs = bugs.filter(b => b.status === 'fixed')
+  const decisions = project?.decisions ?? []
   const adrs = project?.adrs ?? []
 
   function handleAddBug() {
@@ -43,6 +50,15 @@ export default function WarRoom() {
     setBugDesc('')
     setBugSection('')
     setShowBugForm(false)
+  }
+
+  function handleAddDecision() {
+    if (!decText.trim()) return
+    addDecision(decText.trim(), decReason.trim(), decSection)
+    setDecText('')
+    setDecReason('')
+    setDecSection('')
+    setShowDecisionForm(false)
   }
 
   function handleAddAdr() {
@@ -62,11 +78,14 @@ export default function WarRoom() {
     })
   }
 
+  const [copied, setCopied] = useState(false)
+
   const TABS: { id: Tab; label: string; badge?: number }[] = [
-    { id: 'status', label: 'Status' },
-    { id: 'bugs',   label: 'Bugs',      badge: openBugs.length || undefined },
-    { id: 'adrs',   label: 'Decisions', badge: adrs.length || undefined },
-    { id: 'export', label: 'Export' },
+    { id: 'status',    label: 'Status' },
+    { id: 'bugs',      label: 'Bugs',      badge: openBugs.length || undefined },
+    { id: 'decisions', label: 'Decisions', badge: decisions.length || undefined },
+    { id: 'adrs',      label: 'ADRs',      badge: adrs.length || undefined },
+    { id: 'export',    label: 'Export' },
   ]
 
   return (
@@ -216,6 +235,67 @@ export default function WarRoom() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* ── Decisions ── */}
+        {tab === 'decisions' && (
+          <div className={styles.listPanel}>
+            <div className={styles.panelHeader}>
+              <div className={styles.panelMeta}>
+                Session decisions — logged automatically during chat and manually from the canvas.
+              </div>
+              <button className={styles.addBtn} onClick={() => setShowDecisionForm(v => !v)}>
+                {showDecisionForm ? 'Cancel' : '+ Log decision'}
+              </button>
+            </div>
+
+            {showDecisionForm && (
+              <div className={styles.form}>
+                <input
+                  className={styles.formInput}
+                  placeholder="What was decided"
+                  value={decText}
+                  onChange={e => setDecText(e.target.value)}
+                  autoFocus
+                />
+                <input
+                  className={styles.formInput}
+                  placeholder="Why (the reason)"
+                  value={decReason}
+                  onChange={e => setDecReason(e.target.value)}
+                />
+                <select className={styles.formInput} value={decSection} onChange={e => setDecSection(e.target.value)}>
+                  <option value="">Related section...</option>
+                  {sections.map(n => (
+                    <option key={n.id} value={n.data?.label as string}>{n.data?.label as string}</option>
+                  ))}
+                </select>
+                <div className={styles.formActions}>
+                  <button className={styles.formSubmit} onClick={handleAddDecision} disabled={!decText.trim()}>
+                    Save decision
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {decisions.length === 0 && !showDecisionForm && (
+              <div className={styles.empty}>No decisions logged.</div>
+            )}
+
+            {decisions.map(d => (
+              <div key={d.id} className={styles.adrRow}>
+                <div className={styles.adrDot} />
+                <div className={styles.adrInfo}>
+                  <div className={styles.adrTitle}>{d.decision}</div>
+                  {d.reason && <div className={styles.adrDecision}>{d.reason}</div>}
+                  {d.sectionId && <div className={styles.adrReason}>
+                    section: {nodes.find(n => n.id === d.sectionId)?.data.label ?? d.sectionId}
+                  </div>}
+                </div>
+                <button className={styles.deleteBtn} onClick={() => deleteDecision(d.id)}>✕</button>
+              </div>
+            ))}
           </div>
         )}
 
