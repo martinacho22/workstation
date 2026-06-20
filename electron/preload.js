@@ -46,10 +46,6 @@ contextBridge.exposeInMainWorld('electron', {
 
   // ─── Diagnostics ─────────────────────────────────────────────────────────
   diagnostics: {
-    /**
-     * Returns { ptyAvailable, path, shell, home }
-     * Useful for debugging launch failures — call from InlineTerminal error state.
-     */
     pty: () => ipcRenderer.invoke('diagnostics:pty'),
   },
 
@@ -66,5 +62,24 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.invoke('fs:checkDir', { dirPath }),
     openInFinder: (dirPath) =>
       ipcRenderer.invoke('fs:openInFinder', { dirPath }),
+    readDir: (dirPath) =>
+      ipcRenderer.invoke('fs:readDir', { dirPath }),
+    readFile: (filePath) =>
+      ipcRenderer.invoke('fs:readFile', { filePath }),
+    watchDir: (dirPath, cb) => {
+      ipcRenderer.invoke('fs:watchDir', { dirPath }).then((res) => {
+        if (res.success) {
+          const ch = `fs:change:${res.watcherId}`
+          ipcRenderer.on(ch, (_, data) => cb(data))
+        }
+      })
+    },
+    unwatchDir: (watcherId) =>
+      ipcRenderer.invoke('fs:unwatchDir', { watcherId }),
+    onChange: (watcherId, cb) => {
+      const ch = `fs:change:${watcherId}`
+      ipcRenderer.on(ch, (_, data) => cb(data))
+      return () => ipcRenderer.removeAllListeners(ch)
+    },
   },
 })
