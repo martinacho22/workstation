@@ -40,7 +40,7 @@ interface WorkstationState {
   answerGrill:   (answer: string) => Promise<void>
   finishGrill:   () => void
 
-  // Blueprint — now a 3-pass pipeline
+  // Blueprint
   blueprintLoading:   boolean
   blueprintPhase:     'idle' | 'generating' | 'critiquing' | 'laying-out' | 'done'
   blueprintCritique:  string | null
@@ -123,6 +123,8 @@ const INITIAL_NODES: Node<WorkstationNodeData>[] = [
   makeNode('overview', 'Overview', { x: 80, y: 300 }),
 ]
 
+const MAX_HANDOFF_VERSIONS = 20
+
 // ─── Store ────────────────────────────────────────────────────────────────────
 
 export const useWorkstationStore = create<WorkstationState>()(
@@ -143,9 +145,15 @@ export const useWorkstationStore = create<WorkstationState>()(
           const electronAPI = (window as any).electron
           if (electronAPI?.fs?.createProjectDir) {
             const result = await electronAPI.fs.createProjectDir(p.name)
-            if (result?.success) projectDir = result.projectDir
+            if (result?.success) {
+              projectDir = result.projectDir
+            } else {
+              console.warn('[createProject] Directory creation returned:', result?.error)
+            }
           }
-        } catch (_) {}
+        } catch (err) {
+          console.warn('[createProject] Could not create project directory:', err)
+        }
 
         const newProject: Project = {
           ...p, id, createdAt: now, updatedAt: now,
@@ -350,11 +358,6 @@ RECOMMENDATION: [your recommended answer]`
       },
 
       // ── Blueprint — 3-pass pipeline ────────────────────────────────────────
-      //
-      //  Pass 1: Generate initial sections from grill answers
-      //  Pass 2: Critic reviews for stress points, returns amended sections
-      //  Pass 3: Layout engine assigns (x, y) positions as a smart DAG
-      //
       blueprintLoading:  false,
       blueprintPhase:    'idle',
       blueprintCritique: null,
@@ -375,7 +378,7 @@ RECOMMENDATION: [your recommended answer]`
           ? `\n\nRequirements clarified through Q&A:\n${state.grillAnswers.map(a => `- ${a.question}: ${a.answer}`).join('\n')}`
           : ''
 
-        // ── Pass 1: Generate ──────────────────────────────────────────────
+        // Pass 1: Generate
         let rawSections: BlueprintSection[]
         try {
           const prompt = `You are a senior software architect. Break this project into logical build sections.
@@ -396,7 +399,7 @@ Return ONLY a JSON array (no markdown, no explanation):
 Rules:
 - 4-8 sections
 - First section is always "Project Setup"
-- Each section is a vertical slice — something testable end-to-end
+- Each section is a vertical slice
 - Ordered so dependencies come before dependants
 - Be specific to the stack: ${state.project.stack}`
 
@@ -413,7 +416,7 @@ Rules:
           return
         }
 
-        // ── Pass 2: Critic ────────────────────────────────────────────────
+        // Pass 2: Critic
         set((s) => { s.blueprintPhase = 'critiquing' })
         const { sections: reviewedSections, critique } = await runCriticPass(
           rawSections,
@@ -422,11 +425,11 @@ Rules:
         )
         set((s) => { s.blueprintCritique = critique })
 
-        // ── Pass 3: Layout ────────────────────────────────────────────────
+        // Pass 3: Layout
         set((s) => { s.blueprintPhase = 'laying-out' })
         const positions = await runLayoutPass(reviewedSections)
 
-        // ── Apply ─────────────────────────────────────────────────────────
+        // Apply
         get().applyBlueprint(reviewedSections, positions)
         set((s) => {
           s.blueprintLoading = false
@@ -437,27 +440,22 @@ Rules:
       applyBlueprint: (sections, positions) => {
         const store = get()
 
-        // Save blueprint to project
         set((s) => {
           if (s.project) s.project.blueprint = sections
-          // Clear existing section nodes
           s.nodes = s.nodes.filter(n => n.data.kind === 'overview')
           s.edges = []
         })
 
-        // Build a position map from layout pass
         const posMap = new Map<string, { x: number; y: number }>()
         if (positions) {
           for (const p of positions) posMap.set(p.label, { x: p.x, y: p.y })
         }
 
-        // Fallback sequential positions
         sections.forEach((section, i) => {
           const pos = posMap.get(section.label) ?? { x: 600 + i * 360, y: 300 }
           store.addSectionNode(section.label, pos, section.description)
         })
 
-        // Wire dependency edges
         const state = get()
         sections.forEach((section) => {
           if (section.dependsOn?.length > 0) {
@@ -530,8 +528,6 @@ Rules:
         if (n && label.trim()) { n.data.label = label.trim(); n.data.updatedAt = Date.now() }
       }),
 
-      // ── Execute Canvas Commands (from intent parser) ───────────────────────
-
       executeCommands: (commands: CanvasCommand[]) => {
         const store = get()
         for (const cmd of commands) {
@@ -542,11 +538,9 @@ Rules:
                 description: n.description,
                 dependsOn:   n.depends ? [n.depends] : [],
               }))
-              // Run full 3-pass pipeline async — don't await here
               set((s) => {
                 if (s.project) s.project.blueprint = sections
               })
-              // For orchestrator SPAWN via chat, just apply directly (no critic)
               store.applyBlueprint(sections)
               break
             }
@@ -696,6 +690,10 @@ Write production-quality code. Ask before large structural changes. Be concise.`
         const existing = n.data.handoffDoc
         if (existing) {
           existing.versions.push({ timestamp: Date.now(), snapshot: { ...existing, versions: [] } })
+          // Cap versions at MAX_HANDOFF_VERSIONS
+          if (existing.versions.length > MAX_HANDOFF_VERSIONS) {
+            existing.versions = existing.versions.slice(-MAX_HANDOFF_VERSIONS)
+          }
           Object.assign(existing, doc)
         } else {
           n.data.handoffDoc = { ...doc, versions: [] }
