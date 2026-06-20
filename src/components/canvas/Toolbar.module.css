@@ -57,6 +57,13 @@
   background: rgba(255,255,255,0.07);
 }
 
+.activeBtn {
+  composes: btn;
+  color: rgba(0,255,136,0.85);
+  border-color: rgba(0,255,136,0.25);
+  background: rgba(0,255,136,0.08);
+}
+
 .primaryBtn {
   background: rgba(0,255,136,0.1);
   border: 1px solid rgba(0,255,136,0.25);
