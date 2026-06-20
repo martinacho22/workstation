@@ -24,6 +24,9 @@ import Toolbar                    from '@/components/canvas/Toolbar'
 import ProjectSetup               from '@/components/canvas/ProjectSetup'
 import OrchestratorPanel          from '@/components/orchestrator/OrchestratorPanel'
 import Sidebar                    from '@/components/layout/Sidebar'
+import ErrorBoundary              from '@/components/layout/ErrorBoundary'
+import FileTreePanel              from '@/components/layout/FileTreePanel'
+import ContextPanel               from '@/components/layout/ContextPanel'
 import ElectronHeader             from '@/components/layout/ElectronHeader'
 import Dashboard                  from '@/screens/Dashboard'
 import WarRoom                    from '@/screens/WarRoom'
@@ -55,12 +58,15 @@ export default function App() {
   const [showSetup, setShowSetup]       = useState(false)
   const [showCLISetup, setShowCLISetup] = useState(false)
 
+  // Panel toggles — only shown on canvas screen
+  const [showFileTree, setShowFileTree] = useState(false)
+  const [showContext, setShowContext]   = useState(false)
+
   useEffect(() => {
     const done = localStorage.getItem(SETUP_DONE_KEY)
     if (!done) setShowCLISetup(true)
   }, [])
 
-  // Wired onConnect — dragging between handles creates a FlowEdge (dashed blue)
   const onConnect = useCallback((connection: Connection) => {
     const store = useWorkstationStore.getState()
     const newEdge = {
@@ -78,7 +84,7 @@ export default function App() {
   // ── First launch ──────────────────────────────────────────────────────────
   if (showCLISetup) {
     return (
-      <>
+      <ErrorBoundary>
         <ElectronHeader />
         <div style={{ paddingTop: HEADER_H, height: '100vh', boxSizing: 'border-box' }}>
           <Setup onComplete={() => {
@@ -86,14 +92,14 @@ export default function App() {
             setShowCLISetup(false)
           }} />
         </div>
-      </>
+      </ErrorBoundary>
     )
   }
 
   const openSessionIds = Object.keys(sessions)
 
   return (
-    <>
+    <ErrorBoundary>
       <ElectronHeader />
 
       <div style={{
@@ -105,7 +111,12 @@ export default function App() {
         background: 'var(--bg, #0d0d14)',
       }}>
 
-        {/* ── LEFT: sidebar nav ── */}
+        {/* ── LEFT: file tree panel (collapsible, canvas only) ── */}
+        {screen === 'canvas' && showFileTree && (
+          <FileTreePanel onClose={() => setShowFileTree(false)} />
+        )}
+
+        {/* ── LEFT (narrow): sidebar nav ── */}
         <Sidebar screen={screen} onChange={(s) => setScreen(s as Screen)} />
 
         {/* ── CENTRE: main content ── */}
@@ -143,8 +154,28 @@ export default function App() {
                     borderBottom:   '1px solid rgba(255,255,255,0.06)',
                     background:     'rgba(10,10,18,0.95)',
                     backdropFilter: 'blur(8px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '0 12px',
                   }}>
                     <Toolbar onNewProject={() => setShowSetup(true)} />
+
+                    {/* Panel toggle buttons */}
+                    {project && (
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <PanelToggleBtn
+                          label="Files"
+                          active={showFileTree}
+                          onClick={() => setShowFileTree(v => !v)}
+                        />
+                        <PanelToggleBtn
+                          label="Context"
+                          active={showContext}
+                          onClick={() => setShowContext(v => !v)}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Canvas — full remaining height */}
@@ -215,7 +246,7 @@ export default function App() {
                       )}
                     </ReactFlow>
 
-                    {/* Phase swim lane labels — overlaid on canvas */}
+                    {/* Phase swim lane labels */}
                     {project && (
                       <div style={{
                         position: 'absolute',
@@ -241,9 +272,48 @@ export default function App() {
           )}
         </div>
 
+        {/* ── RIGHT: context panel (collapsible, canvas only) ── */}
+        {screen === 'canvas' && showContext && (
+          <ContextPanel onClose={() => setShowContext(false)} />
+        )}
+
         {/* ── RIGHT: orchestrator panel ── */}
         <OrchestratorPanel showChat={screen === 'canvas'} />
       </div>
-    </>
+    </ErrorBoundary>
+  )
+}
+
+// ─── Panel Toggle Button ──────────────────────────────────────────────────────
+
+function PanelToggleBtn({
+  label,
+  active,
+  onClick,
+}: {
+  label: string
+  active: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        background: active ? 'rgba(0,255,136,0.08)' : 'rgba(255,255,255,0.03)',
+        border: active
+          ? '1px solid rgba(0,255,136,0.2)'
+          : '1px solid rgba(255,255,255,0.06)',
+        color: active ? 'rgba(0,255,136,0.8)' : 'rgba(255,255,255,0.3)',
+        fontSize: 11,
+        fontWeight: 500,
+        padding: '5px 10px',
+        borderRadius: 6,
+        cursor: 'pointer',
+        fontFamily: 'inherit',
+        transition: 'all 0.12s',
+      }}
+    >
+      {label}
+    </button>
   )
 }
