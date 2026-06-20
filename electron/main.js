@@ -14,9 +14,6 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 let mainWindow
 
 // ─── Resolve full PATH so Electron can find `claude` ─────────────────────────
-// On macOS, apps launched from Finder/Dock don't inherit the shell PATH,
-// so `claude` (installed via npm -g) is invisible to child_process.
-// We ask the user's login shell for its PATH and merge it in at startup.
 function resolveShellPath() {
   try {
     const shellBin = process.env.SHELL || '/bin/zsh'
@@ -28,7 +25,6 @@ function resolveShellPath() {
       process.env.PATH = result
     }
   } catch (_) {
-    // fallback — add common npm global bin paths manually
     const extras = [
       path.join(os.homedir(), '.npm-global', 'bin'),
       path.join(os.homedir(), '.nvm', 'versions', 'node', 'current', 'bin'),
@@ -67,7 +63,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  resolveShellPath()   // ← must happen before any child_process spawns
+  resolveShellPath()
   createWindow()
   registerClaudeBridgeHandlers()
   app.on('activate', () => {
@@ -77,6 +73,14 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
+})
+
+// ─── Kill all PTY processes on quit ─────────────────────────────────────────
+app.on('before-quit', () => {
+  for (const [id, ptyProc] of Object.entries(terminals)) {
+    try { ptyProc.kill() } catch (_) {}
+    delete terminals[id]
+  }
 })
 
 // ─── PTY / Terminal IPC ───────────────────────────────────────────────────────
@@ -91,19 +95,15 @@ ipcMain.handle('terminal:create', (event, { id, shell: shellCmd, skipPermissions
     }
   }
 
-  // Resolve working directory
   const workDir = (cwd && fs.existsSync(cwd)) ? cwd : os.homedir()
 
   let ptyProcess
 
   if (shellCmd === 'claude') {
-    // ── Launch Claude Code directly ─────────────────────────────────────────
-    // Find claude binary — check common locations if not on PATH
     let claudeBin = 'claude'
     try {
       claudeBin = execSync('which claude', { encoding: 'utf8', env: process.env }).trim()
     } catch (_) {
-      // Try known npm global bin locations
       const candidates = [
         path.join(os.homedir(), '.npm-global', 'bin', 'claude'),
         path.join(os.homedir(), '.nvm', 'versions', 'node', 'current', 'bin', 'claude'),
@@ -131,9 +131,7 @@ ipcMain.handle('terminal:create', (event, { id, shell: shellCmd, skipPermissions
         error: `Could not launch Claude Code: ${spawnErr.message}\n\nMake sure it is installed: npm install -g @anthropic-ai/claude-code`,
       }
     }
-
   } else {
-    // ── Plain shell (bash / zsh) ────────────────────────────────────────────
     const shellToUse = shellCmd || (os.platform() === 'win32' ? 'powershell.exe' : process.env.SHELL || '/bin/zsh')
 
     try {
@@ -164,7 +162,6 @@ ipcMain.handle('terminal:create', (event, { id, shell: shellCmd, skipPermissions
     }
   })
 
-  // Send the preset prompt after a short delay so Claude Code has time to boot
   if (presetPrompt) {
     const delay = shellCmd === 'claude' ? 2500 : 500
     setTimeout(() => {
@@ -230,7 +227,6 @@ ipcMain.handle('fs:createProjectDir', (event, { projectName }) => {
       fs.writeFileSync(metaFile, JSON.stringify({ project: projectName, createdAt: Date.now() }, null, 2))
     }
 
-    // Also write a CLAUDE.md so Claude Code immediately knows the context
     const claudeMd = path.join(projectDir, 'CLAUDE.md')
     if (!fs.existsSync(claudeMd)) {
       fs.writeFileSync(claudeMd,
@@ -265,7 +261,60 @@ ipcMain.handle('fs:openInFinder', (event, { dirPath }) => {
   return { success: false, error: 'Directory not found' }
 })
 
-// ─── Diagnostics — renderer can ask what's wrong ─────────────────────────────
+// ─── Read directory listing ──────────────────────────────────────────────────
+
+ipcMain.handle('fs:readDirectory', (event, { dirPath }) => {
+  try {
+    if (!dirPath || !fs.existsSync(dirPath)) {
+      return []
+    }
+
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true })
+    const result = entries
+      .filter(entry => !entry.name.startsWith('.')) // skip hidden files
+      .map(entry => ({
+        name: entry.name,
+        path: path.join(dirPath, entry.name),
+        isDir: entry.isDirectory(),
+      }))
+      .sort((a, b) => {
+        // Directories first, then alphabetical
+        if (a.isDir && !b.isDir) return -1
+        if (!a.isDir && b.isDir) return 1
+        return a.name.localeCompare(b.name)
+      })
+
+    // For directories, also fetch children (one level deep)
+    const withChildren = result.map(entry => {
+      if (entry.isDir) {
+        try {
+          const children = fs.readdirSync(entry.path, { withFileTypes: true })
+          entry.children = children
+            .filter(c => !c.name.startsWith('.'))
+            .map(c => ({
+              name: c.name,
+              path: path.join(entry.path, c.name),
+              isDir: c.isDirectory(),
+            }))
+            .sort((a, b) => {
+              if (a.isDir && !b.isDir) return -1
+              if (!a.isDir && b.isDir) return 1
+              return a.name.localeCompare(b.name)
+            })
+        } catch (_) {
+          entry.children = []
+        }
+      }
+      return entry
+    })
+
+    return withChildren
+  } catch (err) {
+    return []
+  }
+})
+
+// ─── Diagnostics ─────────────────────────────────────────────────────────────
 
 ipcMain.handle('diagnostics:pty', () => {
   return {
