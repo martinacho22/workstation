@@ -44,21 +44,30 @@ contextBridge.exposeInMainWorld('electron', {
     fixAuth: ()  => ipcRenderer.invoke('claude:fix-auth'),
   },
 
-  // ─── Diagnostics ─────────────────────────────────────────────────────────
-  diagnostics: {
-    /**
-     * Returns { ptyAvailable, path, shell, home }
-     * Useful for debugging launch failures — call from InlineTerminal error state.
-     */
-    pty: () => ipcRenderer.invoke('diagnostics:pty'),
+  // ─── Dev Server ──────────────────────────────────────────────────────────
+  dev: {
+    start:   (dir) => ipcRenderer.invoke('dev:start', { dir }),
+    stop:    ()    => ipcRenderer.invoke('dev:stop'),
+    status:  ()    => ipcRenderer.invoke('dev:status'),
+    onReady: (cb) => {
+      ipcRenderer.on('dev:ready', (_, data) => cb(data))
+      return () => ipcRenderer.removeAllListeners('dev:ready')
+    },
+    onOutput: (cb) => {
+      ipcRenderer.on('dev:output', (_, data) => cb(data))
+      return () => ipcRenderer.removeAllListeners('dev:output')
+    },
+    onExit: (cb) => {
+      ipcRenderer.on('dev:exit', (_, data) => cb(data))
+      return () => ipcRenderer.removeAllListeners('dev:exit')
+    },
+    onError: (cb) => {
+      ipcRenderer.on('dev:error', (_, data) => cb(data))
+      return () => ipcRenderer.removeAllListeners('dev:error')
+    },
   },
 
-  // ─── System dialogs ──────────────────────────────────────────────────────
-  dialog: {
-    openFolder: () => ipcRenderer.invoke('dialog:openFolder'),
-  },
-
-  // ─── Filesystem helpers ──────────────────────────────────────────────────
+  // ─── File system (read tree + read files) ────────────────────────────────
   fs: {
     createProjectDir: (projectName) =>
       ipcRenderer.invoke('fs:createProjectDir', { projectName }),
@@ -66,5 +75,28 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.invoke('fs:checkDir', { dirPath }),
     openInFinder: (dirPath) =>
       ipcRenderer.invoke('fs:openInFinder', { dirPath }),
+    readDir: (dirPath) =>
+      ipcRenderer.invoke('fs:readDir', { dirPath }),
+    readFile: (filePath) =>
+      ipcRenderer.invoke('fs:readFile', { filePath }),
+    watchDir: (dir, id) =>
+      ipcRenderer.invoke('fs:watchDir', { dir, id }),
+    unwatchDir: (id) =>
+      ipcRenderer.invoke('fs:unwatchDir', { id }),
+    onChange: (id, cb) => {
+      const ch = `fs:change:${id}`
+      ipcRenderer.on(ch, (_, data) => cb(data))
+      return () => ipcRenderer.removeAllListeners(ch)
+    },
+  },
+
+  // ─── Diagnostics ─────────────────────────────────────────────────────────
+  diagnostics: {
+    pty: () => ipcRenderer.invoke('diagnostics:pty'),
+  },
+
+  // ─── System dialogs ──────────────────────────────────────────────────────
+  dialog: {
+    openFolder: () => ipcRenderer.invoke('dialog:openFolder'),
   },
 })
