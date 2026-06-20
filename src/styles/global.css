@@ -7,6 +7,7 @@
 }
 
 :root {
+  /* Core (from global.css) */
   --bg:          #0a0a0f;
   --surface:     #111118;
   --surface2:    #16161f;
@@ -22,13 +23,48 @@
   --warning:     #ffaa00;
   --done:        rgba(0, 255, 136, 0.4);
 
+  /* Extended surface tokens (merged from globals.css) */
+  --surface-1:        #111118;
+  --surface-2:        #16161f;
+  --surface-3:        #1e1e2e;
+
+  /* Extended border tokens (merged from globals.css) */
+  --border-subtle:    #1e1e2e;
+  --border-default:   #2a2a3e;
+  --border-bright:    #3a3a5e;
+
+  /* Extended text tokens (merged from globals.css) */
+  --text-primary:     #e8e8f0;
+  --text-secondary:   #8888aa;
+  --text-terminal:    #00ff88;
+
+  /* Status colors (merged from globals.css) */
+  --status-idle:      #44445a;
+  --status-active:    #00ff88;
+  --status-done:      #3a3a5e;
+  --status-blocked:   #ff4466;
+
+  /* Edge colors (merged from globals.css) */
+  --edge-flow:        rgba(0, 255, 136, 0.4);
+  --edge-tangent:     rgba(136, 136, 255, 0.4);
+  --edge-tieback:     rgba(0, 255, 136, 0.6);
+
+  /* Canvas (merged from globals.css) */
+  --canvas-bg:        #0a0a0f;
+  --canvas-dot:       #1a1a2e;
+
+  /* Radius */
   --radius-sm:   6px;
   --radius:      10px;
   --radius-lg:   14px;
+  --radius-md:   10px;
+  --radius-xl:   18px;
 
+  /* Typography */
   --font-sans:   'Inter', system-ui, sans-serif;
   --font-mono:   'JetBrains Mono', 'Fira Code', monospace;
 
+  /* Node dimensions */
   --node-width:  480px;
   --node-height: 340px;
 }
@@ -72,6 +108,28 @@ textarea, input {
   background: var(--accent) !important;
   border-color: var(--accent) !important;
 }
+
+/* React Flow controls/minimap (merged from globals.css) */
+.react-flow__controls {
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+.react-flow__controls button {
+  background: transparent;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.react-flow__controls button:hover {
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+.react-flow__minimap {
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+.react-flow__edge-path { stroke-width: 1.5; }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
