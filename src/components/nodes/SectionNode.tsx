@@ -23,7 +23,6 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
   const chatOpen   = !!session && !session.minimised
   const chatExists = !!session
 
-  // Last message preview — shown when chat is open
   const lastMsg = session?.messages?.length
     ? session.messages[session.messages.length - 1]
     : null
@@ -33,7 +32,6 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
         : lastMsg.content)
     : null
 
-  // Blueprint order for tray positioning
   const blueprint   = useWorkstationStore(s => s.project?.blueprint)
   const bpIdx       = blueprint?.findIndex(b => b.label === data.label) ?? 0
   const sectionDesc = blueprint?.find(b => b.label === data.label)?.description
@@ -42,7 +40,6 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
   const messageCount = session?.messages?.length ?? data.chatHistory?.length ?? 0
   const hasHandoff   = !!data.handoffDoc
 
-  // Expanded = chat is open OR terminal is open
   const expanded = chatOpen || terminalOpen
 
   function commitRename() {
@@ -81,6 +78,7 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
     if (!blockReason.trim()) return
     updateNodeStatus(id, 'blocked', {
       reason:    blockReason.trim(),
+      // Store the human-readable label instead of the opaque nanoid
       blockedBy: blockBy || undefined,
       since:     Date.now(),
     })
@@ -107,15 +105,12 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
         <Handle type="target" position={Position.Left}  className={styles.handle} />
         <Handle type="source" position={Position.Right} className={styles.handle} />
 
-        {/* Status bar — left edge */}
         <div className={styles.statusBar} style={{ background: statusColor }} />
 
-        {/* Session dot — pulsing green when terminal open */}
         {terminalOpen && (
           <div className={styles.sessionDot} title="Claude Code session open" />
         )}
 
-        {/* Blue ring when chat is open */}
         {chatOpen && <div className={styles.chatRing} />}
 
         <div className={styles.body}>
@@ -136,22 +131,23 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
             <div className={styles.label}>{data.label}</div>
           )}
 
-          {/* Description — always shown, one line */}
           {sectionDesc && (
             <div className={styles.desc}>{sectionDesc}</div>
           )}
 
-          {/* Blocked reason */}
           {data.status === 'blocked' && data.blockedReason && (
             <div className={styles.blockedBadge}>
               ⚠ {data.blockedReason.reason}
+              {data.blockedReason.blockedBy && (
+                <span style={{ opacity: 0.6, marginLeft: 4 }}>
+                  (by: {data.blockedReason.blockedBy})
+                </span>
+              )}
             </div>
           )}
 
-          {/* ── Expanded content — shown when chat is open ── */}
           {expanded && (
             <div className={styles.expandedSection}>
-              {/* Last chat message preview */}
               {lastMsgPreview && (
                 <div className={styles.lastMsgPreview}>
                   <span className={styles.lastMsgRole}>
@@ -161,7 +157,6 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
                 </div>
               )}
 
-              {/* Launch terminal button — visible when expanded, not just on hover */}
               <button
                 className={styles.launchTerminalBtn}
                 onClick={e => { e.stopPropagation(); setTerminalOpen(v => !v) }}
@@ -169,7 +164,6 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
                 {terminalOpen ? '⌘ Close terminal' : '⌘ Launch Claude Code'}
               </button>
 
-              {/* Terminal active indicator */}
               {terminalOpen && (
                 <div className={styles.terminalActiveBadge}>
                   <span className={styles.terminalDot} />
@@ -196,7 +190,6 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
           </div>
         </div>
 
-        {/* Hint — only shown on hover, fades after first use */}
         {!hintSeen && (
           <div className={styles.hintBar}>
             <span>click → chat</span>
@@ -204,7 +197,6 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
           </div>
         )}
 
-        {/* Context menu */}
         {showMenu && (
           <div className={styles.menu} onClick={e => e.stopPropagation()}>
             <button className={styles.menuItem} onClick={() => { setRenameVal(data.label); setRenaming(true); setShowMenu(false) }}>
@@ -241,7 +233,6 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
           </div>
         )}
 
-        {/* Inline terminal */}
         {terminalOpen && (
           <InlineTerminal
             nodeId={id}
@@ -250,7 +241,6 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
         )}
       </div>
 
-      {/* Block modal */}
       {showBlockModal && (
         <div className={styles.modalBackdrop} onClick={() => setShowBlockModal(false)}>
           <div className={styles.modal} onClick={e => e.stopPropagation()}>
@@ -270,7 +260,7 @@ function SectionNode({ id, data, selected }: NodeProps<WorkstationNodeData>) {
             >
               <option value="">Blocked by… (optional)</option>
               {sectionNodes.map(n => (
-                <option key={n.id} value={n.id}>{n.data.label}</option>
+                <option key={n.id} value={n.data.label as string}>{n.data.label}</option>
               ))}
             </select>
             <div className={styles.modalActions}>
