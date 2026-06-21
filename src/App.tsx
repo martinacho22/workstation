@@ -32,6 +32,8 @@ import Settings                   from '@/screens/Settings'
 import Setup                      from '@/screens/Setup'
 import ReliabilityBar             from '@/components/panes/ReliabilityBar'
 import { startReliabilityWatcher, stopReliabilityWatcher } from '@/lib/reliabilityRunner'
+import DevServerPanel             from '@/components/panes/DevServerPanel'
+
 import { nanoid }                 from 'nanoid'
 
 const HEADER_H       = 40
@@ -258,6 +260,25 @@ export default function App() {
                     {openSessionIds.map(nodeId => (
                       <FloatingChatCard key={nodeId} nodeId={nodeId} />
                     ))}
+
+                    {/* Dev Server Panel — bottom-left floating */}
+                    {project && (
+                      <div style={{
+                        position: 'absolute',
+                        bottom: 16,
+                        left: 16,
+                        zIndex: 100,
+                        maxWidth: 360,
+                        width: 'auto',
+                      }}>
+                        <DevServerPanel />
+                      </div>
+                    )}
+
+                    {/* Reliability Bar — bottom-right floating */}
+                    {project && (
+                      <ReliabilityBar />
+                    )}
                   </div>
                 </div>
               )}

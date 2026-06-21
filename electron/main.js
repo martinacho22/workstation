@@ -2,7 +2,8 @@ const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron')
 const path = require('path')
 const os   = require('os')
 const fs   = require('fs')
-const { execSync } = require('child_process')
+const { execSync, spawn } = require('child_process')
+const net = require('net')
 
 let pty
 try { pty = require('node-pty') } catch (_) { pty = null }
@@ -73,6 +74,285 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
+})
+
+// ─── Dev Server ──────────────────────────────────────────────────────────────
+
+let devServerProcess = null
+let devServerPort    = null
+let devServerCwd     = null
+let devServerOutput  = []
+const MAX_OUTPUT_LINES = 500
+
+/**
+ * Detect the most likely dev command and port from a project's package.json.
+ */
+function detectDevConfig(projectDir) {
+  const pkgPath = path.join(projectDir, 'package.json')
+  if (!fs.existsSync(pkgPath)) return { command: 'npx serve .', port: 3000 }
+
+  try {
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'))
+    const scripts = pkg.scripts || {}
+
+    // Try common commands in priority order
+    if (scripts.dev)  return { command: 'npm run dev',  port: 5173 }
+    if (scripts.start) return { command: 'npm start',   port: 3000 }
+    if (scripts.serve) return { command: 'npm run serve', port: 5000 }
+
+    // Detect framework from dependencies
+    const deps = { ...pkg.dependencies, ...pkg.devDependencies }
+    if (deps.next)        return { command: 'npm run dev',    port: 3000 }
+    if (deps.vite)        return { command: 'npm run dev',    port: 5173 }
+    if (deps['react-scripts']) return { command: 'npm start', port: 3000 }
+    if (deps.svelte)      return { command: 'npm run dev',    port: 5173 }
+    if (deps.astro)       return { command: 'npm run dev',    port: 4321 }
+    if (deps.gatsby)      return { command: 'npm run develop', port: 8000 }
+    if (deps.parcel)      return { command: 'npm run start',  port: 1234 }
+    if (deps['@remix-run/react']) return { command: 'npm run dev', port: 5173 }
+
+    return { command: 'npx serve .', port: 3000 }
+  } catch {
+    return { command: 'npx serve .', port: 3000 }
+  }
+}
+
+/**
+ * Test if a port is open (i.e. something is already listening there).
+ */
+function isPortOpen(port, host) {
+  return new Promise((resolve) => {
+    const socket = new net.Socket()
+    socket.setTimeout(1500)
+    socket.on('connect', () => { socket.destroy(); resolve(true) })
+    socket.on('error', () => { socket.destroy(); resolve(false) })
+    socket.on('timeout', () => { socket.destroy(); resolve(false) })
+    socket.connect(port, host || '127.0.0.1')
+  })
+}
+
+ipcMain.handle('dev:start', async (event, { dir }) => {
+  // Validate directory
+  if (!dir || !fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
+    return { success: false, error: `Directory not found: ${dir}` }
+  }
+
+  // Check if already running
+  if (devServerProcess) {
+    // Check if it's still alive
+    try {
+      if (devServerProcess.exitCode === null) {
+        return {
+          success: true,
+          alreadyRunning: true,
+          port: devServerPort,
+          command: devServerProcess._command || 'unknown',
+        }
+      }
+    } catch { /* dead, clear it */ }
+    devServerProcess = null
+    devServerPort = null
+  }
+
+  const config = detectDevConfig(dir)
+  devServerCwd = dir
+  devServerOutput = []
+
+  // If the port is already open, return it as ready
+  if (await isPortOpen(config.port, '127.0.0.1')) {
+    devServerPort = config.port
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('dev:ready', { port: config.port, url: `http://localhost:${config.port}` })
+    }
+    return { success: true, port: config.port, url: `http://localhost:${config.port}`, alreadyRunning: true }
+  }
+
+  // Try the detected command — fall back to npx serve if it fails
+  let cmd = config.command
+  let port = config.port
+
+  try {
+    const cmdParts = cmd.split(/\s+/)
+    const bin = cmdParts[0]
+    const args = cmdParts.slice(1)
+
+    devServerProcess = spawn(bin, args, {
+      cwd: dir,
+      env: { ...process.env, FORCE_COLOR: '0', BROWSER: 'none' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: true,
+    })
+    devServerProcess._command = cmd
+
+    let outputBuffer = ''
+    let detectedPort = null
+
+    const handleOutput = (data) => {
+      const text = data.toString()
+      outputBuffer += text
+      devServerOutput.push(text)
+      if (devServerOutput.length > MAX_OUTPUT_LINES) devServerOutput.shift()
+
+      // Detect port from common dev server output patterns
+      const portMatch = text.match(/https?:\/\/localhost:(\d+)/)
+        || text.match(/(?:port|on)\s*:?\s*(\d{4,5})/i)
+        || text.match(/Local:\s*https?:\/\/[^:]+:(\d+)/)
+        || text.match(/(\d{4,5})\s*\/\s*http/)
+      if (portMatch) {
+        detectedPort = parseInt(portMatch[1])
+      }
+
+      // Send chunk to renderer
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('dev:output', { text })
+      }
+
+      // Check if server is ready
+      const readySignals = [
+        /ready/i, /started/i, /listening on/i, /local:/i,
+        /compiled successfully/i, /compiled with warnings/i,
+        /server running/i, /available on/i, /running on/i,
+      ]
+      const ready = readySignals.some(r => r.test(text))
+      if (ready || detectedPort) {
+        const finalPort = detectedPort || port
+        devServerPort = finalPort
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('dev:ready', {
+            port: finalPort,
+            url: `http://localhost:${finalPort}`,
+          })
+        }
+      }
+    }
+
+    devServerProcess.stdout.on('data', handleOutput)
+    devServerProcess.stderr.on('data', handleOutput)
+
+    devServerProcess.on('close', (code) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('dev:exit', { code, output: devServerOutput.slice(-20) })
+      }
+      devServerProcess = null
+      devServerPort = null
+    })
+
+    devServerProcess.on('error', (err) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('dev:error', { error: err.message })
+      }
+    })
+
+    return { success: true, port, command: cmd, url: `http://localhost:${port}` }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('dev:stop', async () => {
+  if (!devServerProcess) return { success: true, wasRunning: false }
+
+  try {
+    // Kill the process tree
+    const pid = devServerProcess.pid
+    if (pid) {
+      try {
+        process.kill(-pid, 'SIGTERM')
+      } catch {
+        try {
+          process.kill(pid, 'SIGTERM')
+        } catch {}
+      }
+    }
+    devServerProcess.kill()
+  } catch {}
+  devServerProcess = null
+  devServerPort = null
+  return { success: true, wasRunning: true }
+})
+
+ipcMain.handle('dev:status', () => {
+  const running = devServerProcess !== null && devServerProcess.exitCode === null
+  return {
+    running,
+    port: devServerPort,
+    cwd: devServerCwd,
+    output: devServerOutput.slice(-50),
+  }
+})
+
+// ─── File watcher — for auto-reload signals ──────────────────────────────────
+
+const watchers = {}
+
+ipcMain.handle('fs:watchDir', (event, { dir, id }) => {
+  if (!dir || !fs.existsSync(dir)) return { success: false, error: 'Directory not found' }
+
+  // Clean up existing watcher for this id
+  if (watchers[id]) {
+    watchers[id].close()
+  }
+
+  try {
+    const watcher = fs.watch(dir, { recursive: true }, (eventType, filename) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(`fs:change:${id}`, { eventType, filename })
+      }
+    })
+    watchers[id] = watcher
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('fs:unwatchDir', (event, { id }) => {
+  if (watchers[id]) {
+    watchers[id].close()
+    delete watchers[id]
+  }
+  return { success: true }
+})
+
+// ─── File read/write (for file tree) ─────────────────────────────────────────
+
+ipcMain.handle('fs:readDir', (event, { dirPath }) => {
+  try {
+    if (!dirPath || !fs.existsSync(dirPath)) return { success: false, error: 'Path not found' }
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true })
+    const items = entries
+      .filter(e => !e.name.startsWith('.')) // skip hidden files
+      .map(e => ({
+        name: e.name,
+        path: path.join(dirPath, e.name),
+        isDirectory: e.isDirectory(),
+        // For symlinks, check what they point to
+        isSymlink: e.isSymbolicLink(),
+      }))
+      .sort((a, b) => {
+        // Directories first, then alphabetical
+        if (a.isDirectory && !b.isDirectory) return -1
+        if (!a.isDirectory && b.isDirectory) return 1
+        return a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+      })
+    return { success: true, items }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('fs:readFile', (event, { filePath }) => {
+  try {
+    if (!filePath || !fs.existsSync(filePath)) return { success: false, error: 'File not found' }
+    const stat = fs.statSync(filePath)
+    if (!stat.isFile()) return { success: false, error: 'Not a file' }
+    // Don't read files larger than 1MB
+    if (stat.size > 1024 * 1024) return { success: false, error: 'File too large (max 1MB)' }
+    const content = fs.readFileSync(filePath, 'utf-8')
+    return { success: true, content, size: stat.size, mtime: stat.mtimeMs }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
 })
 
 // ─── PTY / Terminal IPC ───────────────────────────────────────────────────────
@@ -254,6 +534,10 @@ ipcMain.handle('fs:openInFinder', (event, { dirPath }) => {
   return { success: false, error: 'Directory not found' }
 })
 
+// --- File system read + watch ---
+
+const watchers = {}
+
 ipcMain.handle('fs:readDir', (event, { dirPath }) => {
   try {
     if (!dirPath || !fs.existsSync(dirPath)) {
@@ -289,43 +573,22 @@ ipcMain.handle('fs:readFile', (event, { filePath }) => {
   }
 })
 
-// ─── File watcher for reliability review ──────────────────────────────────────
-
-const watchers = {}
-
 ipcMain.handle('fs:watchDir', (event, { dirPath }) => {
   try {
     if (!dirPath || !fs.existsSync(dirPath)) {
       return { success: false, error: 'Directory not found' }
     }
-
-    const watcherId = `watch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-
-    try {
-      const watcher = fs.watch(dirPath, { recursive: true }, (eventType, filename) => {
-        if (mainWindow && !mainWindow.isDestroyed() && filename) {
-          mainWindow.webContents.send(`fs:change:${watcherId}`, {
-            eventType,
-            filename,
-            fullPath: path.join(dirPath, filename),
-          })
-        }
-      })
-      watchers[watcherId] = watcher
-    } catch (watchErr) {
-      // Recursive watch might fail on some systems — try non-recursive
-      const watcher = fs.watch(dirPath, (eventType, filename) => {
-        if (mainWindow && !mainWindow.isDestroyed() && filename) {
-          mainWindow.webContents.send(`fs:change:${watcherId}`, {
-            eventType,
-            filename,
-            fullPath: path.join(dirPath, filename),
-          })
-        }
-      })
-      watchers[watcherId] = watcher
-    }
-
+    const watcherId = 'watch_' + str(Date.now()) + '_' + str(random.random())[2:8]
+    const watcher = fs.watch(dirPath, { recursive: true }, (eventType, filename) => {
+      if (mainWindow && !mainWindow.isDestroyed() && filename) {
+        mainWindow.webContents.send('fs:change:' + watcherId, {
+          eventType, filename,
+          fullPath: path.join(dirPath, filename),
+          timestamp: Date.now()
+        })
+      }
+    })
+    watchers[watcherId] = watcher
     return { success: true, watcherId }
   } catch (err) {
     return { success: false, error: err.message }
@@ -340,7 +603,25 @@ ipcMain.handle('fs:unwatchDir', (event, { watcherId }) => {
   return { success: true }
 })
 
-// ─── Diagnostics ──────────────────────────────────────────────────────────────
+// --- Cleanup on quit ---
+
+app.on('before-quit', () => {
+  if (devServerProcess) {
+    try {
+      const pid = devServerProcess.pid
+      if (pid) {
+        try { process.kill(-pid, 'SIGTERM') } catch (e) {}
+        try { process.kill(pid, 'SIGTERM') } catch (e) {}
+      }
+    } catch (e) {}
+  }
+  Object.values(watchers).forEach(w => w.close())
+  Object.values(terminals).forEach(t => {
+    try { t.kill() } catch (e) {}
+  })
+})
+
+// --- Diagnostics ---
 
 ipcMain.handle('diagnostics:pty', () => {
   return {

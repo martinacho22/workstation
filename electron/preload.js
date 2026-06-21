@@ -44,17 +44,45 @@ contextBridge.exposeInMainWorld('electron', {
     fixAuth: ()  => ipcRenderer.invoke('claude:fix-auth'),
   },
 
-  // ─── Diagnostics ─────────────────────────────────────────────────────────
-  diagnostics: {
-    pty: () => ipcRenderer.invoke('diagnostics:pty'),
+  // --- Dev Server ---
+  dev: {
+    start:   (dir) => ipcRenderer.invoke('dev:start', { dir }),
+    stop:    ()    => ipcRenderer.invoke('dev:stop'),
+    status:  ()    => ipcRenderer.invoke('dev:status'),
+    onReady: (cb) => {
+      ipcRenderer.on('dev:ready', (_, data) => cb(data))
+      return () => ipcRenderer.removeAllListeners('dev:ready')
+    },
+    onOutput: (cb) => {
+      ipcRenderer.on('dev:output', (_, data) => cb(data))
+      return () => ipcRenderer.removeAllListeners('dev:output')
+    },
+    onExit: (cb) => {
+      ipcRenderer.on('dev:exit', (_, data) => cb(data))
+      return () => ipcRenderer.removeAllListeners('dev:exit')
+    },
+    onError: (cb) => {
+      ipcRenderer.on('dev:error', (_, data) => cb(data))
+      return () => ipcRenderer.removeAllListeners('dev:error')
+    },
   },
 
-  // ─── System dialogs ──────────────────────────────────────────────────────
-  dialog: {
-    openFolder: () => ipcRenderer.invoke('dialog:openFolder'),
+  // --- File system (read tree + read files) ---
+  fs: {
+    createProjectDir: (projectName) =>
+      ipcRenderer.invoke('fs:createProjectDir', { projectName }),
+    checkDir: (dirPath) =>
+      ipcRenderer.invoke('fs:checkDir', { dirPath }),
+    openInFinder: (dirPath) =>
+      ipcRenderer.invoke('fs:openInFinder', { dirPath }),
+    readDir: (dirPath) =>
+      ipcRenderer.invoke('fs:readDir', { dirPath }),
+    readFile: (filePath) =>
+      ipcRenderer.invoke('fs:readFile', { filePath }),
+
   },
 
-  // ─── Filesystem helpers ──────────────────────────────────────────────────
+  // ─── File system (read tree + read files) ────────────────────────────────
   fs: {
     createProjectDir: (projectName) =>
       ipcRenderer.invoke('fs:createProjectDir', { projectName }),
@@ -69,17 +97,28 @@ contextBridge.exposeInMainWorld('electron', {
     watchDir: (dirPath, cb) => {
       ipcRenderer.invoke('fs:watchDir', { dirPath }).then((res) => {
         if (res.success) {
-          const ch = `fs:change:${res.watcherId}`
-          ipcRenderer.on(ch, (_, data) => cb(data))
+          const ch = 'fs:change:' + res.watcherId
+          ipcRenderer.on(ch, (_, data) => cb(data, res.watcherId))
         }
       })
     },
     unwatchDir: (watcherId) =>
       ipcRenderer.invoke('fs:unwatchDir', { watcherId }),
     onChange: (watcherId, cb) => {
-      const ch = `fs:change:${watcherId}`
+      const ch = 'fs:change:' + watcherId
       ipcRenderer.on(ch, (_, data) => cb(data))
       return () => ipcRenderer.removeAllListeners(ch)
     },
+  },
+
+  // --- Diagnostics ---
+  diagnostics: {
+    pty: () => ipcRenderer.invoke('diagnostics:pty'),
+  },
+
+  // --- System dialogs ---
+  dialog: {
+    openFolder: () => ipcRenderer.invoke('dialog:openFolder'),
+  },
   },
 })
