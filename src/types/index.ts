@@ -1,6 +1,6 @@
 // ─── Node Types ───────────────────────────────────────────────────────────────
 
-export type NodeKind = 'section' | 'overview'
+export type NodeKind = 'section' | 'overview' | 'deploy'
 
 export type NodeStatus = 'idle' | 'active' | 'done' | 'blocked'
 
@@ -24,6 +24,16 @@ export interface WorkstationNodeData {
   createdAt: number
   updatedAt: number
   [key: string]: unknown
+}
+
+// ─── Deploy Node ──────────────────────────────────────────────────────────────
+
+export type DeployTarget = 'vercel' | 'railway' | 'fly' | 'netlify' | 'none'
+
+export interface EnvVar {
+  key: string
+  value: string
+  isSet: boolean
 }
 
 // ─── Chat ─────────────────────────────────────────────────────────────────────

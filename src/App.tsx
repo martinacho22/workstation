@@ -16,6 +16,7 @@ import { useWorkstationStore }    from '@/store/useWorkstationStore'
 import { useChatSessionsStore }   from '@/store/chatSessionsStore'
 import SectionNode                from '@/components/nodes/SectionNode'
 import OverviewNode               from '@/components/nodes/OverviewNode'
+import DeployNode                 from '@/components/nodes/DeployNode'
 import { DependencyEdge, FlowEdge } from '@/components/edges'
 import FloatingChatCard           from '@/components/canvas/FloatingChatCard'
 import SessionTray                from '@/components/canvas/SessionTray'
@@ -37,6 +38,7 @@ const SETUP_DONE_KEY = 'workstation_setup_complete'
 const nodeTypes: NodeTypes = {
   sectionNode:  SectionNode,
   overviewNode: OverviewNode,
+  deployNode:   DeployNode,
 }
 
 const edgeTypes: EdgeTypes = {
@@ -188,6 +190,7 @@ export default function App() {
                           if (n.data?.status === 'blocked')  return 'rgba(240,192,64,0.6)'
                           if (n.data?.status === 'active')   return 'rgba(0,255,136,0.6)'
                           if (n.data?.kind   === 'overview') return 'var(--accent, #00ff88)'
+                          if (n.data?.kind   === 'deploy')   return 'rgba(0,200,255,0.6)'
                           return 'rgba(255,255,255,0.08)'
                         }}
                         maskColor="rgba(10,10,15,0.7)"

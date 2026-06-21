@@ -7,6 +7,7 @@
  * using a simple syntax:
  *
  *   %%SPAWN_NODE label="Auth System" description="JWT login + refresh tokens" depends="Project Setup"%%
+ *   %%SPAWN_DEPLOY_NODE label="Deploy to Vercel" target="vercel"%%
  *   %%UPDATE_STATUS label="Auth System" status="active"%%
  *   %%ADD_EDGE from="Auth System" to="Dashboard"%%
  *   %%SET_PHASE phase="Planning"%%
@@ -16,11 +17,12 @@
  */
 
 export type CanvasCommand =
-  | { type: 'SPAWN_NODE';    label: string; description?: string; depends?: string }
-  | { type: 'UPDATE_STATUS'; label: string; status: 'idle' | 'active' | 'done' | 'blocked' }
-  | { type: 'ADD_EDGE';      from: string;  to: string }
-  | { type: 'SET_PHASE';     phase: string }
-  | { type: 'BLUEPRINT';     nodes: Array<{ label: string; description: string; depends?: string }> }
+  | { type: 'SPAWN_NODE';        label: string; description?: string; depends?: string }
+  | { type: 'SPAWN_DEPLOY_NODE'; label: string; target?: string }
+  | { type: 'UPDATE_STATUS';     label: string; status: 'idle' | 'active' | 'done' | 'blocked' }
+  | { type: 'ADD_EDGE';          from: string;  to: string }
+  | { type: 'SET_PHASE';         phase: string }
+  | { type: 'BLUEPRINT';         nodes: Array<{ label: string; description: string; depends?: string }> }
 
 const CMD_RE = /%%([A-Z_]+)(.*?)%%/g
 const ATTR_RE = /(\w+)="([^"]*)"/g
@@ -76,6 +78,16 @@ export function parseIntent(text: string): {
           inlineCommands.push(m[0])
         }
         break
+      case 'SPAWN_DEPLOY_NODE':
+        if (attrs.label) {
+          commands.push({
+            type: 'SPAWN_DEPLOY_NODE',
+            label: attrs.label,
+            target: attrs.target,
+          })
+          inlineCommands.push(m[0])
+        }
+        break
       case 'UPDATE_STATUS':
         if (attrs.label && attrs.status) {
           commands.push({
@@ -127,8 +139,11 @@ Your job: help the developer plan and coordinate their project at a HIGH LEVEL.
 You can directly manipulate the project canvas by embedding commands in your response.
 These are invisible to the user — they execute silently.
 
-### Spawn a new node (phase/section):
+### Spawn a new section node (phase/section):
 %%SPAWN_NODE label="Name of phase" description="What this phase builds" depends="Name of blocking phase or empty"%%
+
+### Spawn a deploy node (deployment target):
+%%SPAWN_DEPLOY_NODE label="Deploy to Vercel" target="vercel"%%
 
 ### Update a node's status:
 %%UPDATE_STATUS label="Name of phase" status="idle|active|done|blocked"%%
