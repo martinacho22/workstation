@@ -29,7 +29,7 @@ function timeAgo(ts: number): string {
 }
 
 export default function FloatingChatCard({ nodeId }: Props) {
-  const { nodes, project, addChatMessage, updateNodeStatus } = useWorkstationStore()
+  const { nodes, project, addChatMessage, updateNodeStatus, addDecision } = useWorkstationStore()
   const { sessions, closeChat, minimiseChat, updatePos }     = useChatSessionsStore()
 
   const session = sessions[nodeId]
@@ -39,6 +39,9 @@ export default function FloatingChatCard({ nodeId }: Props) {
   const [streaming, setStreaming]       = useState(false)
   const [streamBuffer, setStreamBuffer] = useState('')
   const [terminalTs, setTerminalTs]     = useState<number | null>(null)
+
+  // Persistent session ID derived from node ID — allows claude --resume across messages
+  const sessionId = `ws-node-${nodeId}`
 
   // Drag
   const dragging   = useRef(false)
@@ -52,14 +55,14 @@ export default function FloatingChatCard({ nodeId }: Props) {
     ? project.blueprint.findIndex(b => b.label === node?.data.label) + 1
     : session?.order + 1 ?? 1
 
-  // Terminal activity — listen for terminal:activity events
+  // Terminal activity — listen for terminal:data events via the existing preload method
   useEffect(() => {
     const electronAPI = (window as any).electron
-    if (!electronAPI?.on) return
-    const off = electronAPI.on?.(`terminal:activity:${nodeId}`, () => {
+    if (!electronAPI?.terminal?.onData) return
+    const unsub = electronAPI.terminal.onData(nodeId, () => {
       setTerminalTs(Date.now())
     })
-    return () => off?.()
+    return () => { if (typeof unsub === 'function') unsub() }
   }, [nodeId])
 
   useEffect(() => {
@@ -131,7 +134,14 @@ export default function FloatingChatCard({ nodeId }: Props) {
       const fullText  = await streamClaude(fullPrompt, (chunk) => {
         accumulated += chunk
         setStreamBuffer(accumulated)
-      }, { skipPermissions: false, systemPrompt })
+      }, {
+        skipPermissions: false,
+        systemPrompt,
+        // Pass persistent session ID so Claude CLI --resume allows
+        // conversation continuity across messages without cold-starting.
+        sessionId,
+        continueSession: node.data.chatHistory.length > 1,
+      })
 
       setStreamBuffer('')
       addChatMessage(node.id, {
@@ -139,6 +149,12 @@ export default function FloatingChatCard({ nodeId }: Props) {
         content: fullText || accumulated, timestamp: Date.now(),
       })
       if (node.data.status === 'idle') updateNodeStatus(node.id, 'active')
+
+      // Record a decision log entry if the response contained a notable decision
+      const decisionMatch = fullText?.match(/decision:?\s*(.+)/im)
+      if (decisionMatch) {
+        addDecision(decisionMatch[1].trim(), fullText?.slice(0, 200) ?? '', node.id)
+      }
     } catch (err) {
       setStreamBuffer('')
       addChatMessage(node.id, {
