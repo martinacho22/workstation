@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ReactFlow,
   Background,
@@ -30,6 +30,8 @@ import Dashboard                  from '@/screens/Dashboard'
 import WarRoom                    from '@/screens/WarRoom'
 import Settings                   from '@/screens/Settings'
 import Setup                      from '@/screens/Setup'
+import ReliabilityBar             from '@/components/panes/ReliabilityBar'
+import { startReliabilityWatcher, stopReliabilityWatcher } from '@/lib/reliabilityRunner'
 import { nanoid }                 from 'nanoid'
 
 const HEADER_H       = 40
@@ -57,10 +59,29 @@ export default function App() {
   const [showSetup, setShowSetup]       = useState(false)
   const [showCLISetup, setShowCLISetup] = useState(false)
 
+  const projectDirRef = useRef<string | null>(null)
+
   useEffect(() => {
     const done = localStorage.getItem(SETUP_DONE_KEY)
     if (!done) setShowCLISetup(true)
   }, [])
+
+  // ── Start/stop reliability watcher when project dir changes ──
+  useEffect(() => {
+    const dir = project?.projectDir ?? project?.repoPath ?? null
+
+    if (dir && dir !== projectDirRef.current) {
+      projectDirRef.current = dir
+      startReliabilityWatcher(dir)
+    }
+
+    return () => {
+      if (projectDirRef.current) {
+        stopReliabilityWatcher()
+        projectDirRef.current = null
+      }
+    }
+  }, [project?.projectDir, project?.repoPath])
 
   // Wired onConnect — dragging between handles creates a FlowEdge (dashed blue)
   const onConnect = useCallback((connection: Connection) => {
@@ -247,6 +268,9 @@ export default function App() {
         {/* ── RIGHT: orchestrator panel ── */}
         <OrchestratorPanel showChat={screen === 'canvas'} />
       </div>
+
+      {/* ── Reliability bar — bottom-right overlay ── */}
+      <ReliabilityBar />
     </>
   )
 }

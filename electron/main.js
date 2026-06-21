@@ -14,9 +14,6 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 let mainWindow
 
 // ─── Resolve full PATH so Electron can find `claude` ─────────────────────────
-// On macOS, apps launched from Finder/Dock don't inherit the shell PATH,
-// so `claude` (installed via npm -g) is invisible to child_process.
-// We ask the user's login shell for its PATH and merge it in at startup.
 function resolveShellPath() {
   try {
     const shellBin = process.env.SHELL || '/bin/zsh'
@@ -28,7 +25,6 @@ function resolveShellPath() {
       process.env.PATH = result
     }
   } catch (_) {
-    // fallback — add common npm global bin paths manually
     const extras = [
       path.join(os.homedir(), '.npm-global', 'bin'),
       path.join(os.homedir(), '.nvm', 'versions', 'node', 'current', 'bin'),
@@ -67,7 +63,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  resolveShellPath()   // ← must happen before any child_process spawns
+  resolveShellPath()
   createWindow()
   registerClaudeBridgeHandlers()
   app.on('activate', () => {
@@ -91,19 +87,15 @@ ipcMain.handle('terminal:create', (event, { id, shell: shellCmd, skipPermissions
     }
   }
 
-  // Resolve working directory
   const workDir = (cwd && fs.existsSync(cwd)) ? cwd : os.homedir()
 
   let ptyProcess
 
   if (shellCmd === 'claude') {
-    // ── Launch Claude Code directly ─────────────────────────────────────────
-    // Find claude binary — check common locations if not on PATH
     let claudeBin = 'claude'
     try {
       claudeBin = execSync('which claude', { encoding: 'utf8', env: process.env }).trim()
     } catch (_) {
-      // Try known npm global bin locations
       const candidates = [
         path.join(os.homedir(), '.npm-global', 'bin', 'claude'),
         path.join(os.homedir(), '.nvm', 'versions', 'node', 'current', 'bin', 'claude'),
@@ -133,7 +125,6 @@ ipcMain.handle('terminal:create', (event, { id, shell: shellCmd, skipPermissions
     }
 
   } else {
-    // ── Plain shell (bash / zsh) ────────────────────────────────────────────
     const shellToUse = shellCmd || (os.platform() === 'win32' ? 'powershell.exe' : process.env.SHELL || '/bin/zsh')
 
     try {
@@ -164,7 +155,6 @@ ipcMain.handle('terminal:create', (event, { id, shell: shellCmd, skipPermissions
     }
   })
 
-  // Send the preset prompt after a short delay so Claude Code has time to boot
   if (presetPrompt) {
     const delay = shellCmd === 'claude' ? 2500 : 500
     setTimeout(() => {
@@ -209,7 +199,7 @@ ipcMain.handle('dialog:openFolder', async () => {
   return result.canceled ? null : result.filePaths[0]
 })
 
-// ─── Project directory management ─────────────────────────────────────────────
+// ─── Filesystem helpers ───────────────────────────────────────────────────────
 
 ipcMain.handle('fs:createProjectDir', (event, { projectName }) => {
   try {
@@ -230,7 +220,6 @@ ipcMain.handle('fs:createProjectDir', (event, { projectName }) => {
       fs.writeFileSync(metaFile, JSON.stringify({ project: projectName, createdAt: Date.now() }, null, 2))
     }
 
-    // Also write a CLAUDE.md so Claude Code immediately knows the context
     const claudeMd = path.join(projectDir, 'CLAUDE.md')
     if (!fs.existsSync(claudeMd)) {
       fs.writeFileSync(claudeMd,
@@ -265,7 +254,93 @@ ipcMain.handle('fs:openInFinder', (event, { dirPath }) => {
   return { success: false, error: 'Directory not found' }
 })
 
-// ─── Diagnostics — renderer can ask what's wrong ─────────────────────────────
+ipcMain.handle('fs:readDir', (event, { dirPath }) => {
+  try {
+    if (!dirPath || !fs.existsSync(dirPath)) {
+      return { success: false, error: 'Directory not found' }
+    }
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true })
+    const files = entries.map(entry => ({
+      name: entry.name,
+      path: path.join(dirPath, entry.name),
+      isDirectory: entry.isDirectory(),
+      isFile: entry.isFile(),
+      isSymlink: entry.isSymbolicLink(),
+      size: entry.isFile() ? fs.statSync(path.join(dirPath, entry.name)).size : 0,
+      mtimeMs: entry.isFile() || entry.isDirectory()
+        ? fs.statSync(path.join(dirPath, entry.name)).mtimeMs
+        : 0,
+    }))
+    return { success: true, files }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('fs:readFile', (event, { filePath }) => {
+  try {
+    if (!filePath || !fs.existsSync(filePath)) {
+      return { success: false, error: 'File not found' }
+    }
+    const content = fs.readFileSync(filePath, 'utf-8')
+    return { success: true, content }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+})
+
+// ─── File watcher for reliability review ──────────────────────────────────────
+
+const watchers = {}
+
+ipcMain.handle('fs:watchDir', (event, { dirPath }) => {
+  try {
+    if (!dirPath || !fs.existsSync(dirPath)) {
+      return { success: false, error: 'Directory not found' }
+    }
+
+    const watcherId = `watch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+
+    try {
+      const watcher = fs.watch(dirPath, { recursive: true }, (eventType, filename) => {
+        if (mainWindow && !mainWindow.isDestroyed() && filename) {
+          mainWindow.webContents.send(`fs:change:${watcherId}`, {
+            eventType,
+            filename,
+            fullPath: path.join(dirPath, filename),
+          })
+        }
+      })
+      watchers[watcherId] = watcher
+    } catch (watchErr) {
+      // Recursive watch might fail on some systems — try non-recursive
+      const watcher = fs.watch(dirPath, (eventType, filename) => {
+        if (mainWindow && !mainWindow.isDestroyed() && filename) {
+          mainWindow.webContents.send(`fs:change:${watcherId}`, {
+            eventType,
+            filename,
+            fullPath: path.join(dirPath, filename),
+          })
+        }
+      })
+      watchers[watcherId] = watcher
+    }
+
+    return { success: true, watcherId }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('fs:unwatchDir', (event, { watcherId }) => {
+  if (watchers[watcherId]) {
+    watchers[watcherId].close()
+    delete watchers[watcherId]
+  }
+  return { success: true }
+})
+
+// ─── Diagnostics ──────────────────────────────────────────────────────────────
 
 ipcMain.handle('diagnostics:pty', () => {
   return {
